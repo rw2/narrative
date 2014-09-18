@@ -1,9 +1,9 @@
 /**
  * Ouput widget to display a pangenome object.
  * @author Chris Henry <chrisshenry@gmail.com>, Roman Sutormin <rsutormin@lbl.gov>
- * @public
+ * @widget kbasePanGenome
+ * @since 2014-08-02 16:46:23
  */
-
 (function( $, undefined ) {
     $.KBWidget({
         name: "kbasePanGenome",

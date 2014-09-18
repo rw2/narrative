@@ -1,9 +1,9 @@
 /**
  * Output widget for visualization of Multiple Sequence Alignment.
  * @author Roman Sutormin <rsutormin@lbl.gov>
- * @public
+ * @widget kbaseMSA
+ * @since 2014-07-31 15:13:35
  */
-
 (function($, undefined) {
     $.KBWidget({
         name: 'kbaseMSA',

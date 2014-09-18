@@ -1,10 +1,14 @@
-/* Shows the SEED functional category hierarchy as a 
+/**
+ * Shows the SEED functional category hierarchy as a 
  * collapsable/expandable bar chart
  * 
  * Found a collapsable hierarcy example from Mike Bostock to follow:
  * https://gist.github.com/mbostock/1093025
  * 
  * will adapt this to work with the KBase SEED annotations
+ * @author Paramvir Dehal <psdehal@lbl.gov>
+ * @widget KBaseSEEDFunctions
+ * @since 2014-07-23 13:48:50
  */
 
  (function( $, undefined ) {

@@ -1,3 +1,9 @@
+/**
+ * This widget allows to compare two FBA-models based on result of comparison two proteomes.
+ * @author Roman Sutormin <rsutormin@lbl.gov>
+ * @widget FbaModelComparisonWidget
+ * @since 2014-01-22 12:06:49
+ */
 (function( $, undefined ) {
 
 $.KBWidget({

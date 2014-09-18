@@ -1,4 +1,9 @@
-
+/**
+ * Widget shows gap filling results.
+ * @author Michael Sneddon <mwsneddon@lbl.gov>
+ * @widget kbaseGapfillStatus
+ * @since 2014-02-05 16:22:22
+ */
 (function($, undefined) {
     $.KBWidget({
         /* 

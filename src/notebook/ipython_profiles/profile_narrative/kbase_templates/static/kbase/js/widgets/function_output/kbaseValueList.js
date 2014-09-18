@@ -11,7 +11,10 @@
         ..etc..
     ]
  }
-*/
+ * @author Dan Gunter <dkgunter@lbl.gov>
+ * @widget ValueListWidget
+ * @since 2014-02-08 05:29:47
+ */
 (function( $, undefined ) {
     $.KBWidget({
         name: "ValueListWidget",

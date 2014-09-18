@@ -1,5 +1,8 @@
 /**
  * KBase widget to download content.
+ * @author Travis Harrison <guumby@gmail.com>
+ * @widget DownloadFileWidget
+ * @since 2014-07-10 08:48:56
  */
 (function($, undefined) {
     $.KBWidget({

@@ -1,4 +1,4 @@
-/*
+/**
   Heatmap Renderer
 
   Displays a heatmap.
@@ -39,6 +39,9 @@
         hierarchy arrays for each row
      data (array of array of float)
         value matrix
+* @author Travis Harrison <guumby@gmail.com>
+* @widget DrilldownHeatmapWidget
+* @since 2014-08-15 13:32:41
 */
 
 (function($, undefined) {

@@ -1,5 +1,8 @@
 /**
  * KBase widget to display an lists within categories.
+ * @author Travis Harrison <guumby@gmail.com>
+ * @widget CategoryViewWidget
+ * @since 2014-06-20 10:30:53
  */
 (function($, undefined) {
     $.KBWidget({

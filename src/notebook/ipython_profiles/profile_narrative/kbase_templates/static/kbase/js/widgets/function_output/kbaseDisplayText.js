@@ -1,5 +1,8 @@
 /**
  * KBase widget to display text.
+ * @author Travis Harrison <guumby@gmail.com>
+ * @widget DisplayTextWidget
+ * @since 2014-06-17 09:48:48
  */
 (function($, undefined) {
     $.KBWidget({

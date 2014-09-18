@@ -1,4 +1,4 @@
-/*
+/**
   Graph Renderer
 
   Displays a graph of pie / bar charts with an optional legend.
@@ -100,6 +100,9 @@
 
   normalize_stacked_area (boolean)
       If set to false the stacked area chart will not normalize the values
+* @author Travis Harrison <guumby@gmail.com>
+* @widget GraphWidget
+* @since 2014-08-11 21:22:13
 */
 
 (function($, undefined) {

@@ -1,5 +1,8 @@
 /**
  * KBase widget to display an image.
+ * @author Travis Harrison <guumby@gmail.com> 
+ * @widget ImageViewWidget
+ * @since 2014-01-25 22:11:54
  */
 (function($, undefined) {
     $.KBWidget({

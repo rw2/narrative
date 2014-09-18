@@ -2,9 +2,9 @@
  * An input widget to handle building a media set.
  * This has the option of loading/modifying an existing media.
  * @author Bill Riehl <wjriehl@lbl.gov>
- * @public
+ * @widget kbaseMediaViewer
+ * @since 2014-01-07 12:35:47
  */
-
 (function( $, undefined ) {
     $.KBWidget({
         name: "kbaseMediaViewer", 

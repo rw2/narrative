@@ -1,7 +1,8 @@
 /**
  * Output widget for visualization of genome annotation.
  * @author Roman Sutormin <rsutormin@lbl.gov>
- * @public
+ * @widget GenomeAnnotation
+ * @since 2013-12-12 18:10:27
  */
 
 (function( $, undefined ) {

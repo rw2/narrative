@@ -1,6 +1,8 @@
 /**
  * Just a simple example widget to display FBA comparison
- * 
+ * @author Matt DeJongh <dejongh@hope.edu> 
+ * @widget kbaseCompareFBAs
+ * @since 2014-07-24 12:31:11
  */
 (function( $, undefined ) {
     $.KBWidget({

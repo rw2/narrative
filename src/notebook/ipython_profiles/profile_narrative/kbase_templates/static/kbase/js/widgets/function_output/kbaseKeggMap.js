@@ -4,7 +4,9 @@
     { ko_id: int, ko_id: int, ko_id: int, ... },
     { ko_id: int, ko_id: int, ko_id: int, ... }
  ]
- 
+ * @author Travis Harrison <guumby@gmail.com>
+ * @widget KeggMapWidget
+ * @since 2014-02-07 14:11:27
  */
 (function($, undefined) {
     $.KBWidget({

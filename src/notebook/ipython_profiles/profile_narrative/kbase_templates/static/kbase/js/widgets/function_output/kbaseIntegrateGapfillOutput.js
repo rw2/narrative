@@ -1,4 +1,9 @@
-
+/**
+ * Viewer of gap-filling integration result.
+ * @author Michael Sneddon <mwsneddon@lbl.gov>
+ * @widget kbaseIntegrateGapfillOutput
+ * @since 2014-02-07 13:08:38
+ */
 (function($, undefined) {
     $.KBWidget({
         

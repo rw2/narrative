@@ -1,3 +1,9 @@
+/**
+ * FBA-model tabs view.
+ * @author Bill Riehl <wjriehl@lbl.gov>
+ * @widget kbaseModelTabs
+ * @since 2013-10-10 22:07:10
+ */
 (function( $, undefined ) {
 
 $.KBWidget({

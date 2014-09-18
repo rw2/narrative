@@ -1,6 +1,9 @@
 /**
  * Just a simple example widget - makes a div with "Hello world!"
  * in a user-defined color (must be a css color - 'red' or 'yellow' or '#FF0000')
+ * @author Christopher Bun <chrisbun@gmail.com>
+ * @widget AssemblyWidget
+ * @since 2014-02-06 10:08:08
  */
 (function( $, undefined ) {
     $.KBWidget({

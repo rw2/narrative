@@ -1,3 +1,9 @@
+/**
+ * Media editor.
+ * @author Bill Riehl <wjriehl@lbl.gov>
+ * @widget kbaseMediaEditorNarrative
+ * @since 2013-10-11 22:06:41
+ */
 (function( $, undefined ) {
 
 $.KBWidget({

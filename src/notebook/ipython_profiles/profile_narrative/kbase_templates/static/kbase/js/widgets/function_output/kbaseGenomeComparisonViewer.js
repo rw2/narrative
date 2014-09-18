@@ -1,3 +1,9 @@
+/**
+ * Viewer of results of comparison several genomes based on k-mer similarity search for protein sequences.
+ * @author Christopher Henry <chenry@mcs.anl.gov> 
+ * @widget kbaseGenomeComparisonViewer
+ * @since 2014-08-07 10:06:41
+ */
 (function( $, undefined ) {
     $.KBWidget({
         name: "kbaseGenomeComparisonViewer",

@@ -1,6 +1,8 @@
 /**
  * Just a simple example widget to display promconstraints
- * 
+ * @author Matt DeJongh <dejongh@hope.edu>
+ * @widget kbasePromConstraint
+ * @since 2014-07-23 13:36:48
  */
 (function( $, undefined ) {
     $.KBWidget({

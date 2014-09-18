@@ -1,9 +1,9 @@
 /**
  * Output widget for visualization of tree object (species trees and gene trees).
- * Roman Sutormin <rsutormin@lbl.gov>
- * @public
+ * @author Bill Riehl <wjriehl@lbl.gov>, Roman Sutormin <rsutormin@lbl.gov>
+ * @widget kbaseTree
+ * @since 2014-03-21 17:36:03
  */
-
 (function($, undefined) {
     $.KBWidget({
         name: 'kbaseTree',
