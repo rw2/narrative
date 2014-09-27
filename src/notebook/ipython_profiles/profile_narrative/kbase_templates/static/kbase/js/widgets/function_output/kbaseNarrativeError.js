@@ -67,18 +67,79 @@
             return this.render();
         },
 
-        /**
-         * (not required)
-         * I prefer to keep initialization and rendering code separate, but
-         * that's just a style thing. You can do whatever the widget requires.
-         */
         render: function() {
-            this.$elem.append('Sorry, an error occurred<br>')
-                      .append('In method: ' + this.options.error.method_name + '<br>')
-                      .append('of type: ' + this.options.error.type + '<br>')
-                      .append('severity: ' + this.options.error.severity + '<br>')
-                      .append('Error Message: ')
-                      .append($('<pre>').append(this.options.error.msg));
+            var addRow = function(name, value) {
+                return "<tr><td><b>" + name + "</b></td><td>" + value + "</td></tr>";
+            };
+
+            // Shamelessly lifted from kbaseNarrativeWorkspace.
+            // Thanks Dan!
+            var esc = function(s) { 
+                return s;
+                // return s.replace(/'/g, "&apos;")
+                //         .replace(/"/g, "&quot;")
+                //         .replace(/</g, "&gt;")
+                //         .replace(/>/g, "&lt;");
+            };
+
+            // Reformat a TB as a list
+            var format_tb = function(err) {
+                var s = "\n";
+                var ind = ""; // keep in case change of mind
+                if (err.traceback === undefined) {
+                    s += "No traceback available.\n";
+                }
+                else {
+                    s += "Traceback (most recent call last):\n";
+                    var tb = err.traceback;
+                    for (var i= 0, ctr=0; i < tb.length; i++) {
+                        var entry = tb[i];
+                        if (entry.function == "__call__")
+                            continue;  // ignore wrapper
+                        ctr++;
+                        var txt = "";
+                        if (entry.function || entry.line) {
+                            var txt = ctr + ") ";
+                            txt += "in '" + entry.function + "' line " + entry.line + ": ";
+                        }
+                        txt += entry.text;
+                        s += ind + txt + "\n";
+                    }
+                }
+                return s;
+            };
+
+            var $errorHead = $('<div>')
+                             .addClass('well well-sm')
+                             .append('<b>An error occurred while running your function!</b>');
+
+            var $errorTable = $('<table>')
+                              .addClass('table table-bordered')
+                              .css({'margin-right':'auto', 'margin-left':'auto'})
+                              .append(addRow("Function", esc(this.options.error.method_name)))
+                              .append(addRow("Error Type", esc(this.options.error.type)))
+                              .append(addRow("Severity", esc(this.options.error.severity)));
+
+            var $stackTraceAccordion = $('<div>');
+
+            this.$elem.append($errorHead)
+                      .append($errorTable)
+                      .append($stackTraceAccordion);
+
+            $stackTraceAccordion.kbaseAccordion(
+                { 
+                    elements: [
+                        {
+                            title: 'Detailed Error Message',
+                            body: $('<pre>')
+                                  .addClass('kb-err-msg')
+                                  .append(esc(this.options.error.msg))
+                                  .append(format_tb(this.options.error)),
+                        }
+                    ]
+                }
+            );
+
             return this;
         },
     });

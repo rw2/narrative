@@ -1,4 +1,12 @@
-@import url("http://fonts.googleapis.com/css?family=Roboto");
+@import url("//fonts.googleapis.com/css?family=Roboto");
+
+div#notebook {
+	overflow-y: auto;
+}
+
+.cell.selected {
+	border: #ababab solid;
+}
 
 /**
  * Shim to make sure jQuery-ui dialogs are always on front of other DOM elements.
@@ -41,11 +49,12 @@ body{
 
 /* header styling */
 
-/*body {
-	padding: 0;
-	margin: 0;
+.notebook_app .navbar-kbase {
+	webkit-box-shadow: none;
+	box-shadow: none;
+	moz-box-shadow: none;
 }
-*/
+
 header[role="banner"] {
 /*	overflow: auto;
 	padding: 7px 0 2px 0;
@@ -65,67 +74,6 @@ header[role="banner"] {
 
 }
 
-#logo {
-    float: left;
-    padding: .4em 30px;
-/*
-	float: left;
-	padding-left: 10px;*/
-} 
-
-/*
-nav[role="navigation"] {
-	float: left;
-	margin-left: 10px;
-}
-
-nav[role="navigation"] ul {
-	margin: 0 10px 0 0;
-	display: block;
-	padding: 9px;
-}
-
-
-nav[role="navigation"] ul li {
-	display: inline;
-	margin: 0 10px;
-}
-
-nav[role="navigation"] ul li a {
-	text-decoration: none;
-	font-size: 18px;
-	font-family: 'Roboto';
-	color: #777777;
-	padding: 15px;
-}
-
-nav[role="navigation"] ul li.active a {
-	background-color: #5c9531;
-	color: #fff;
-	-webkit-box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.125);
-	-moz-box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.125);
-	box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.125);
-}
-
-nav[role="navigation"] input[type="text"] {
-	-webkit-border-radius: 4px 4px 4px 4px;
-	-moz-border-radius: 4px 4px 4px 4px;
-	border-radius: 4px 4px 4px 4px;
-	background-color: #ffffff;
-	border: 1px solid #cccccc;
-	-webkit-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075);
-	-moz-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075);
-	box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075);
-	-webkit-transition: border linear .2s, box-shadow linear .2s;
-	-moz-transition: border linear .2s, box-shadow linear .2s;
-	-o-transition: border linear .2s, box-shadow linear .2s;
-	transition: border linear .2s, box-shadow linear .2s;
-
-	padding: 4px 6px; 
-	font-size: 16px;
-	color: #555555;
-}
-*/
 nav[role="navigation"] ul{
     margin: 1.2em 0 .5em 0;
     /*text-align: center;*/
@@ -176,7 +124,7 @@ input#search_terms{
 }
 span#searchspan{
     display: inline-block;
-    width: 60%;
+    width: 50%;
 }
 @media screen and (max-width: 1170px){
     span#searchspan{width: 50%;} 
@@ -190,16 +138,10 @@ span#searchspan{
 @media screen and (max-width: 590px){
     span#searchspan{width: 60%;}   
 }
-/*
-#search_terms {
-	width: 350px;
-	background-image: url(search.png);
-	background-size: 22px; 
-	background-repeat:no-repeat;
-	background-position:right center; 
-}
 
-*/
+div#notebook {
+	border-top: none;
+}
 
 #narrative-name {
 	font-weight: bold;
@@ -217,14 +159,21 @@ span#searchspan{
 
 #narrative-title {
 	position: relative;
-	top: 45px;
-	padding-left: 24px;
+	padding-left: 3px;
 	padding-bottom: 10px;
-	margin: 10px 0; 
+	margin: 0 0 10px 0; 
 }
 
-#menubar-container {
-	width: auto;
+.narrative-menu-container {
+	position: fixed; 
+	z-index: 499;
+	background-color: #ffffff;
+	width: 100%;
+	border-bottom: 1px solid #ababab; 
+	padding-bottom: 30px; 
+	padding-top: 10px; 
+	margin-top: -10px; 
+	margin-left: auto
 }
 
 p.clear{
@@ -346,10 +295,17 @@ nav ul li.selected {
 
 
 /* center pane */
+
+
+#notebook_name {
+	color: #006698;
+	font-family: "OxygenBold", Arial, sans-serif;
+}
+
 #content-column {
 	/*float: left; */
-	max-width: 1170px;
-	height: 100%;
+/*	max-width: 1170px;
+*/	height: 100%;
 	margin-left: 300px;
 }
 
@@ -382,22 +338,12 @@ nav ul li.selected {
 
 /* left pane styling */
 #left-column {
-    /*float: left;
-    width: 289px; 
-    padding: 0px 1px;
-	height: 100%;
-	border-right: 1px solid #AAA;
-	overflow-y: auto;
-	*/
 	width: 289px;
-	position: absolute;
+	position: fixed;
 	left: 10px;
 	bottom: 0;
-	top: 40px;
-}
-
-#data-panel {
-
+	top: 53px;
+	overflow-y: auto;
 }
 
 #data-header {
@@ -496,9 +442,24 @@ nav ul li.selected {
 	overflow: auto;
 }
 
-.left-pane {
+/*.left-pane {
     font-size: 14px;
     position: relative;
+}
+*/
+.left-pane {
+	font-size: 14px;
+	position: relative;
+/*	width: 289px;
+	top: 428px;
+	bottom: 20px;
+	overflow: auto;
+*/}
+
+
+#kb-function-panel .kb-function-body {
+	height: 100% ;
+	max-height: 100% ;
 }
 
 h3.pane-title {
@@ -716,19 +677,30 @@ p span.notification{
 /* Fixes to bring toolbars up to Bootstrap 3 */
 #maintoolbar {
 	position: relative;
-	top: 45px;
+	top: 5px;
 	min-height: 0;
 	border: none !important;
 	background-image: none !important;
-	background-color: #fff !important;
+	background-color: #f9f9f9 !important;
 	-webkit-box-shadow: none;
 	box-shadow: none;
+}
+
+#maintoolbar-container {
+	margin-left: 10px;
 }
 
 #menubar {
 	position: absolute;
 	width: 100%;
 	top: 3px;
+	background-color: #f9f9f9;
+	border-bottom: 2px solid #ddd;
+	padding-bottom: 5px;
+}
+
+#menubar .navbar {
+	margin-bottom: 5px;
 }
 
 #menubar .navbar .container {
@@ -742,14 +714,22 @@ p span.notification{
 	background-image: none;
 	background-color: #f8f8f8;
 }
-.navbar-nav>li>a {
-	padding-top: 5px;
-	padding-bottom: 5px;
+
+#menubar .navbar-nav>li>a {
+	padding-top: 10px;
+	padding-bottom: 7px;
+}
+
+.btn-default, .btn-primary, .btn-success, .btn-info, .btn-warning, .btn-danger {
+	background-image: none;
+}
+
+.panel-default>.panel-heading {
+	background-image: none;
 }
 
 .btn-default {
-	background-image: none;
-	background-color: #f8f8f8;
+	text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.2);	
 }
 
 .btn-group {
@@ -763,7 +743,7 @@ p span.notification{
 #ipython-main-app {
 	position: absolute;
 	bottom: 5;
-	top: 120px;
+	top: 90px;
 	right: 10px;
 	left: 310px;
 	overflow: auto;
@@ -779,3 +759,25 @@ div#notebook_panel {
 box-shadow: 0 -1px 0px rgba(0, 0, 0, 0.1);
 border-left: 1px solid #f2f2f2;
 }
+
+.version-stamp {
+	padding-right: 320px;
+	text-align: right;
+	color: #666;
+	font-size: 90%;
+}
+
+.creator-stamp {
+	padding-right: 320px;
+	height: 1em;
+	text-align: right;
+	color: #006698;
+	font-size: 120%;
+	line-height: 1em;
+	font-family: "OxygenBold", Arial, sans-serif;
+}
+
+.panel {
+	margin-bottom: 0px;
+}
+

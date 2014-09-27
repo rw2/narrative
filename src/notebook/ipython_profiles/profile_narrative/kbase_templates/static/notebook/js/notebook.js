@@ -1629,6 +1629,9 @@ var IPython = (function (IPython) {
      */
     Notebook.prototype.save_notebook = function () {
         // We may want to move the name/id/nbformat logic inside toJSON?
+
+        $('#kb-ws').kbaseNarrativeWorkspace('saveAllCellStates');
+
         var data = this.toJSON();
         data.metadata.name = this.notebook_name;
         data.nbformat = this.nbformat;
@@ -1700,7 +1703,7 @@ var IPython = (function (IPython) {
      * @param {String} error_msg HTTP error message
      */
     Notebook.prototype.save_notebook_error = function (xhr, status, error_msg) {
-        $([IPython.events]).trigger('notebook_save_failed.Notebook');
+        $([IPython.events]).trigger('notebook_save_failed.Notebook', {xhr: xhr, status: status, error_msg: error_msg});
     };
     
     /**
@@ -1785,7 +1788,6 @@ var IPython = (function (IPython) {
         this.start_kernel();
         // load our checkpoint list
         IPython.notebook.list_checkpoints();
-
         $([IPython.events]).trigger('notebook_loaded.Notebook');
     };
 

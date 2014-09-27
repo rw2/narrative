@@ -1,75 +1,54 @@
 /**
- * Create narrative's workspace widget
- * 
+ * This is the entry point for the Narrative's front-end. It initializes
+ * the login session, fires up the data and function widgets, and creates
+ * the kbaseNarrativeWorkspace wrapper around the IPython notebook that 
+ * does fun things like manage widgets and cells and kernel events to talk to them.
  */
+"use strict";
 
-(function( $ ) {
 
+var narrative = {};
+narrative.init = function() {
+    var token = null;
     var narr_ws = null;
 
-    /**
-     * Connecting to KBase..
+    var versionStr = 'KBase Narrative<br>Alpha version';
+    if (window.kbconfig && 
+        window.kbconfig.name && 
+        window.kbconfig.version)
+        versionStr = window.kbconfig.name + '<br>' + window.kbconfig.version;
+    $('.version-stamp').empty().html(versionStr);
+
+    var dataWidget = $('#kb-ws').kbaseWorkspaceDataDeluxe();
+    dataWidget.showLoadingMessage('Waiting for Narrative to finish loading...');
+
+    var functionWidget = $('#kb-function-panel').kbaseNarrativeFunctionPanel({ autopopulate: false });
+    functionWidget.refreshAJAX();
+
+    /*
+     * Once everything else is loaded and the Kernel is idle,
+     * Go ahead and fill in the rest of the Javascript stuff.
      */
-    var kbaseConnecting = function() {
-        console.debug("Connecting.begin");
-        $("#main-container").addClass("pause");
-        $("#kb-ws-guard").addClass("pause");
-        console.debug("Connecting.end");
-    };
+    $([IPython.events]).one('status_started.Kernel', function() {
+        // NAR-271 - Firefox needs to be told where the top of the page is. :P
+        window.scrollTo(0,0);
 
-    /** Once connected */
-    var kbaseConnected = function() {
-        console.debug("kbaseConnected!");
-        $('#main-container').removeClass('pause');
-        $('#kb-ws-guard').removeClass('pause').css("display", "none");
-        if (narr_ws) {
-            var token = $("#login-widget").kbaseLogin("session", "token");
-            narr_ws.loggedIn(token);
-        }
-    };
-    
-    /**
-     * main function.
-     */
-    $(function() {
-        kbaseConnecting();
-
-        $(document).on('loggedIn.kbase', function(event, token) {
-            kbaseConnected();
-        });
-
-        $(document).on('loggedOut.kbase', function(event, token) {
-            narr_ws.loggedOut(token);
-            kbaseConnecting();
-        });
-
-        var token = $("#login-widget").kbaseLogin("session", "token");
-        if (token) {
-            console.debug("Authorization token found");
-            kbaseConnected();
+        var workspaceId = null;
+        if (IPython && IPython.notebook && IPython.notebook.metadata) {
+            workspaceId = IPython.notebook.metadata.ws_name;                
         }
 
-        $([IPython.events]).on('status_idle.Kernel', function() {
-            if (narr_ws == null) {
-                if (narr_ws == null) {
-                    $('#kb-ws').find('.kb-table').kbaseWorkspaceData({container: $('#kb-ws').find('.kb-table')});
-                    var $ws = $('#kb-ws');
-                    narr_ws = $ws
-                        .kbaseNarrativeWorkspace({
-                          loadingImage: "/static/kbase/images/ajax-loader.gif",
-                          controlsElem: $ws.find('.kb-controls'),
-                          tableElem: $ws.find('.kb-table')
-                    });
-                }
-                if (token)
-                    narr_ws.loggedIn(token);
-            }
-        });
+        IPython.notebook.set_autosave_interval(0);
 
+        if (workspaceId) {
+            $('a#workspace-link').attr('href', $('a#workspace-link').attr('href') + 'objects/' + workspaceId);
+            dataWidget.setWorkspace(workspaceId);
+        }
+
+        // Should be renamed.... eventually?
+        narr_ws = $('#notebook_panel').kbaseNarrativeWorkspace({
+            loadingImage: "/static/kbase/images/ajax-loader.gif",
+            ws_id: IPython.notebook.metadata.ws_name
+        });
     });
-
-})( jQuery );
-
-// Some additional JS code that we need to run unreleated to the workspace widget
-// Set the autosave interval to 5 minutes
-//setTimeout( function() {IPython.notebook.set_autosave_interval(300);},2000);
+};

@@ -6,7 +6,6 @@
  * like the CDS and local files.
  *
  * Options:
- *    workspaceURL - the location of the workspace service (default points to existing deployed service)
  *    loadingImage - an image to show in the middle of the widget while loading data
  *    tableElem - HTML element container for the data table
  *    controlsElem - HTML element container for the controls (search/add)
@@ -25,10 +24,10 @@
         parent: "kbaseWidget",
         version: "1.0.0",
         options: {
-            workspaceURL: "https://www.kbase.us/services/workspace",
             loadingImage: "../images/ajax-loader.gif",
             tableElem: null,
-            controlsElem: null
+            controlsElem: null,
+            ws_id: null,
         },
         ws_client: null,
         ws_id: null,
@@ -36,29 +35,44 @@
         defaultInputWidget: "kbaseDefaultNarrativeInput",
         errorWidget: "kbaseNarrativeError",
 
-        // constants.
+        inputsRendered: false,
+        maxSavedStates: 2,      // limit the states saved to 2 for now.
+
+        // constant strings.
         KB_CELL: 'kb-cell',
         KB_TYPE: 'type',
         KB_FUNCTION_CELL: 'function_input',
         KB_OUTPUT_CELL: 'function_output',
         KB_ERROR_CELL: 'kb_error',
         KB_CODE_CELL: 'kb_code',
+        KB_STATE: 'widget_state',
+
+        // set up as a hash for quickie lookup time!
+        ignoredDataTypes: {
+            'string' : 1,
+            'unicode' : 1,
+            'numeric' : 1,
+            'integer' : 1,
+            'list' : 1,
+            'a number' : 1
+        },
 
         init: function(options) {
             this._super(options);
 
-            var self = this;
+            this.ws_id = this.options.ws_id;
             // Whenever the notebook gets loaded, it should rebind things.
             // This *should* only happen once, but I'm putting it here anyway.
 
-            $([IPython.events]).on('notebook_loaded.Notebook', $.proxy(function() {
-                this.rebindActionButtons();
-                this.hideGeneratedCodeCells();
-            }), this);
+            $([IPython.events]).on('notebook_loaded.Notebook', 
+                $.proxy(function() {
+                    this.rebindActionButtons();
+                    this.hideGeneratedCodeCells();
+                }, this)
+            );
 
             $(document).on('workspaceUpdated.Narrative', 
                 $.proxy(function(e, ws_id) {
-                    console.log(ws_id);
                     this.ws_id = ws_id;
                 }, 
                 this)
@@ -67,7 +81,33 @@
             $(document).on('dataUpdated.Narrative', 
                 $.proxy(function(event) {
                     if (IPython && IPython.notebook) {
-                        this.renderFunctionInputs();
+                        // XXX: This is a hell of a hack. I hate
+                        // using the 'first time' bit like this,
+                        // but without some heavy rewiring, it's difficult
+                        // to track when some event occurred.
+                        // So, dirty bit it is.
+                        this.refreshFunctionInputs(!this.inputsRendered);
+                        if (!this.inputsRendered)
+                            this.loadAllRecentCellStates();
+                        this.inputsRendered = true;
+                    }
+                },
+                this)
+            );
+
+            $(document).on('servicesUpdated.Narrative',
+                $.proxy(function(event, serviceSet) {
+                    console.log("listing services!");
+                    console.log(serviceSet);
+                },
+                this)
+            );
+
+            $(document).on('narrativeDataQuery.Narrative', 
+                $.proxy(function(e, params, callback) {
+                    var objList = this.getCurrentNarrativeData();
+                    if (callback) {
+                        callback(objList);
                     }
                 },
                 this)
@@ -76,148 +116,24 @@
             // When a user clicks on a function, this event gets fired with
             // method information. This builds a function cell out of that method
             // and inserts it in the right place.
-            $(document).on('function_clicked.Narrative', function(event, method) {
-                self.buildFunctionCell(method);
-            });
-
-            // Build the list of available functions.
-            $("#function-test").kbaseNarrativeFunctionPanel({});
+            $(document).on('function_clicked.Narrative', 
+                $.proxy(function(event, method) {
+                    this.buildFunctionCell(method);
+                }, 
+                this)
+            );
 
             // Initialize the data table.
-//            this.initDataTable(options.tableElem);
-            this.initControls(options.controlsElem);
-
-            // bind search to data table
-            $search_inp = options.controlsElem.find(':input');
-            var that = this;
-            $search_inp.on('change keyup', function(e) {
-                var tbl = that.dataTableWidget.table;
-                tbl.fnFilter($search_inp.val());
-                tbl.fnDraw();
-            });
-
-            // **DEPRECATED** Initializes controls.
-            this.initFuncs();
-
             this.render();
             return this;
         },
         
-        /**
-         * Initialize controls at top of workspace view.
-         *
-         * @param elem Workspace view element
-         * @returns this
-         */
-        initControls: function(elem) {
-            console.debug('initControls.begin');
-            var $search = $('<div>').addClass('kb-search')
-            var $search_inp = $('<input>').attr('type', 'text');
-            $search.append($search_inp);
-            $search.append($('<i>').addClass('icon-search'));
-            elem.append($search);
-            // populate the dropdown
-            var $dd_menu = $('<div>').addClass('dropdown').attr({id:'kb-ws-upload-pulldown'});
-            var $dd_toggle = $('<a>').addClass("dropdown-toggle").attr({'data-toggle':'dropdown',
-                            href: '#', id: 'kb-ws-add-data'}).text('+ Add');
-            $dd_menu.append($dd_toggle);
-            var ul = $('<ul>').addClass('dropdown-menu').attr({role: 'menu', 'aria-labelledby': 'dLabel'});
-            ul.append($('<li>').addClass('nav-header').text('Add data from..'));
-            ul.append($('<li>').addClass('divider'));
-            var dd_items = { // key: [label, element_id]
-                'upload': {label:'Local file', id: 'kb-ws-upload-local'},
-                'cds': {label:'Central Data Store', id:'kb-ws-upload-cds'}
-            }
-            $.each(dd_items, function(key, info) {
-                var item = $('<li>');
-                item.append($('<a>').attr({'href': '#', 'id': info.id}).text(info.label));
-                ul.append(item);
-            })
-            $dd_menu.append(ul);
-            // add to element
-            elem.append($dd_menu);
-            // activate the dropdown
-            $dd_toggle.dropdown();
-            // bind the upload action
-            var $dlg = $('#kb-ws-upload-dialog');
-            var opts = {$anchor: $('#' + dd_items.upload.id),
-                        ws_parent: this};
-            this.uploadWidget_dlg = $dlg //$dlg.kbaseUploadWidget;
-            this.uploadWidget_opts = opts;
-            // Add a 'refresh' button, bound to this widget's render() function
-            var $refresh = $('<button>')
-                .addClass('btn btn-default btn-sm')
-                .attr({'type': 'button', 'id': 'kb-ws-refresh'});
-                //.text("Refresh");
-            // XXX: BS-3 glyphicons aren't working
-            //$refresh.append($('<span>').addClass("glyphicon glyphicon-refresh"));
-            $refresh.append($('<i>').addClass('icon-refresh'));
-            elem.append($refresh);
-            var self = this;
-            elem.on('click', function(e) {
-                console.debug("refresh.begin");
-                self.render();
-                console.debug("refresh.end");
-            });
-            // done
-
-            return this;
-        },
-
-        /**
-         * Initialize the data table in the workspace view
-         *
-         * @param elem Data table parent element
-         * @returns this
-         */
-        // initDataTable: function(elem) {
-        //     this.dataTableWidget = elem.kbaseWorkspaceDataWidget({
-        //         loadingImage: this.options.loadingImage,
-        //         container: elem
-        //      });
-        //     return this;
-        // },
-
-        /**
-         * Set up interactive features of the function-list panel.
-         */
-        initFuncs: function() {
-            var env = this;
-            $('.kb-function-body ul li').each(function(index) {
-                var $anchor = $(this).find('a');
-                this.name = $anchor.data('name');
-                var self = this;
-                // Add cell for function
-                $anchor.click(function() {
-                    env.addCellForFunction(self.name);
-                });
-                // Help for function
-                var $anchor2 = $(this).find('span.kb-function-help');
-                this.help = $anchor2.data('help');
-                this.help_title = $anchor2.data('name');
-                $anchor2.click(function() {
-                    console.debug("help asked for");
-                    var $elt = $('#kb-function-help');
-                    $elt.addClass("alert alert-info");
-                    $elt.html("<h1>" + self.help_title + " help</h1>" + 
-                              self.help + 
-                              "<h2>Click to hide</h2>");
-                    $elt.click(function() {
-                        $(this).hide();
-                    });
-                    $elt.show();
-                });
-            });
-        },
-
         /**
          * @method buildFunctionCell
          * @param {Object} method - the JSON schema version of the method to invoke. This will
          * include a list of parameters and outputs.
          */
         buildFunctionCell: function(method) {
-            console.log(method);
-
             var cell = IPython.notebook.insert_cell_below('markdown');
             // make this a function input cell, as opposed to an output cell
             this.setFunctionCell(cell, method);
@@ -225,7 +141,7 @@
             // THIS IS WRONG! FIX THIS LATER!
             // But it should work for now... nothing broke up to this point, right?
             var cellIndex = IPython.notebook.ncells() - 1;
-            var cellId = 'kb-cell-' + cellIndex + "-" + this.uuidgen();
+            var cellId = 'kb-cell-' + cellIndex + '-' + this.uuidgen();
 
             // The various components are HTML STRINGS, not jQuery objects.
             // This is because the cell expects a text input, not a jQuery input.
@@ -234,21 +150,20 @@
 
             if (this.validateMethod(method)) {
                 // This is the list of parameters for the given method
-//                var inputs = this.buildFunctionInputs(method, cellId);
                 var inputWidget = this.defaultInputWidget;
-                if (method.properties.widgets.input_widget)
-                    inputWidget = method.properties.widgets.input_widget;
+                if (method.properties.widgets.input)
+                    inputWidget = method.properties.widgets.input;
 
                 var inputDiv = "<div id='inputs'></div>";
 
                 // These are the 'delete' and 'run' buttons for the cell
-                var buttons = "<div class='buttons pull-right' style='margin-top:10px'>" +
-                                  "<button id='" + cellId + "-delete' type='button' value='Delete' class='btn btn-warning'>Delete</button> " +
-                                  "<button id='" + cellId + "-run' type='button' value='Run' class='btn btn-primary'>Run</button>" + 
+                var buttons = "<div class='buttons pull-right'>" + //style='margin-top:10px'>" +
+                                  "<button id='" + cellId + "-delete' type='button' value='Delete' class='btn btn-default btn-sm'>Delete</button> " +
+                                  "<button id='" + cellId + "-run' type='button' value='Run' class='btn btn-primary btn-sm'>Run</button>" + 
                               "</div>";
 
                 // The progress bar remains hidden until invoked by running the cell
-                var progressBar = "<div id='kb-func-progress' style='display:none;'>" +
+                var progressBar = "<div id='kb-func-progress' class='pull-left' style='display:none;'>" +
                                     "<div class='progress progress-striped active kb-cell-progressbar'>" +
                                         "<div class='progress-bar progress-bar-success' role='progressbar' aria-valuenow='0' " +
                                         "aria-valuemin='0' aria-valuemax='100' style='width:0%'/>" +
@@ -256,17 +171,35 @@
                                     "<p class='text-success'/>" +
                                   "</div>";
 
+                // Associate method title with description via BS3 collapsing
+                var methodId = cellId + "-method-details";
+                var buttonLabel = "...";
+                var methodDesc = method.description.replace(/"/g, "'"); // double-quotes hurt markdown rendering
+                var methodInfo = "<div class='kb-func-desc'>" +
+                                   "<h1><b>" + method.title + "</b></h1>" +
+                                   "<span class='pull-right kb-func-timestamp' id='last-run'></span>" +
+                                   "<button class='btn btn-default btn-xs' type='button' data-toggle='collapse'" +
+                                      " data-target='#" + methodId + "'>" + buttonLabel + "</button>" +
+                                    "<div><h2 class='collapse' id='" + methodId + "'>" +
+                                      methodDesc + "</h2></div>" +
+                                 "</div>";
+
                 // Bringing it all together...
-                cellContent = "<div class='kb-cell-run' " + "id='" + cellId + "'>" + 
-                                  "<h1>" + method.title + "</h1>" +
-                                  "<div>" +  
-                                      inputDiv +
-                                      buttons + 
+                cellContent = "<div class='panel kb-func-panel kb-cell-run' id='" + cellId + "'>" +
+                                  "<div class='panel-heading'>" +
+                                      methodInfo +
                                   "</div>" +
-                                  progressBar +
-                              "</div>\n" + 
-                              "<script>" + 
-                              "$('#" + cellId + " > div > #inputs')." + inputWidget + "({ method:'" + JSON.stringify(method) + "'});" +
+                                  "<div class='panel-body'>" +
+                                      inputDiv +
+                                  "</div>" +
+                                  "<div class='panel-footer' style='overflow:hidden'>" +
+                                      progressBar +
+                                      buttons +
+                                  "</div>" +
+                              "</div>" +
+                              "\n<script>" + 
+                              "$('#" + cellId + " > div > div#inputs')." + inputWidget + "({ method:'" +
+                               this.safeJSONStringify(method) + "'});" +
                               "</script>";
             }
             else {
@@ -277,52 +210,102 @@
             cell.rendered = false;
             cell.render();
 
+            // restore the input widget's state.
             this.removeCellEditFunction(cell);
             this.bindActionButtons(cell);
+        },
+
+        /**
+         * A TEMPORARY FUNCTION that should refresh and update the given cell's metadata to the new(er) version,
+         * if it needs to happen.
+         * should be the structure:
+         * {
+         *     'kb-cell': {
+         *         'type' : 'function_input' | 'function_output',
+         *         'method' : object (if input cell),
+         *         'widget' : <widget name>
+         *         'widget_state' : [array of states]
+         *     }
+         * }
+         */
+        checkCellMetadata: function(cell) {
+            if (cell.metadata[this.KB_CELL]) {
+                // if that top-level one is a string, it'll probably be an output cell, so make it one.
+                if (typeof cell.metadata[this.KB_CELL] === "string") {
+                    var newMeta = {};
+                    newMeta[this.KB_TYPE] = this.KB_OUTPUT_CELL;
+                    newMeta['widget'] = undefined;
+                    newMeta[this.KB_STATE] = [];
+                    cell.metadata[this.KB_CELL] = newMeta;
+                }
+                else if (typeof cell.metadata[this.KB_CELL] === "object") {
+                    // The "old" version (i.e. at the beginning of the workshop starting 1/6/2013)
+                    // just needs to make sure the input cells have the widget state as an array.
+                    // AND it should store the widget name, as found in the method, as a separate field.
+
+                    if (cell.metadata[this.KB_CELL][this.KB_TYPE] === this.KB_FUNCTION_CELL) {
+                        if (!cell.metadata[this.KB_CELL]['widget'])
+                            cell.metadata[this.KB_CELL]['widget'] = cell.metadata[this.KB_CELL]['method'].properties.widgets.input || this.defaultInputWidget;
+                        if (!cell.metadata[this.KB_CELL][this.KB_STATE]) {
+                            cell.metadata[this.KB_CELL][this.KB_STATE] = [];
+                            if (cell.metadata[this.KB_CELL]['input_state']) {
+                                cell.metadata[this.KB_CELL][this.KB_STATE].unshift({ 'time': 0, 'state' : cell.metadata[this.KB_CELL]['input_state'] });
+                            }
+                        }
+                        else if (Object.prototype.toString.call(cell.metadata[this.KB_CELL][this.KB_STATE]) !== '[object Array]') {
+                            cell.metadata[this.KB_CELL][this.KB_STATE] = [ { 'time' : 0, 'state' : cell.metadata[this.KB_CELL][this.KB_STATE] } ];
+                        }
+                    }
+                }
+            }
+        },
+
+        /**
+         * Escape chars like single quotes in descriptions and titles,
+         * before rendering as a JSON string.
+         *
+         * @post This does not modify the input object.
+         * @return {string} JSON string
+         */
+        safeJSONStringify: function(method) {
+            var esc = function(s) { return s.replace(/'/g, "&apos;").replace(/"/g, "&quot;"); };
+            return JSON.stringify(method, function(key, value) {
+                return (typeof(value) == "string" && (key == "description" || key == "title")) ?
+                    esc(value) : value;
+            });
         },
 
         /**
          * Refreshes any function inputs to sync with workspace data.
          * Since this re-renders the cell, it must rebind all buttons, too.
          * Kind of annoying, but it should run quickly enough.
+         *
+         * Also checks to see if that cell has any parameter state associated
+         * with it, and if so, sends that to the widget.
          * @private
          */
-        renderFunctionInputs: function() {
+        refreshFunctionInputs: function(fullRender) {
             if (IPython && IPython.notebook) {
                 var cells = IPython.notebook.get_cells();
                 for (var i=0; i<cells.length; i++) {
                     var cell = cells[i];
                     if (this.isFunctionCell(cell)) {
-//                    if (cell.metadata && cell.metadata['kb-cell'] && cell.metadata['kb-cell']['type'] == this.FUNCTION_CELL) {
-                        cell.rendered = false;
-                        cell.render();
-                        this.bindActionButtons(cell);
+                        var method = cell.metadata[this.KB_CELL].method;
+                        var inputWidget = method.properties.widgets.input || this.defaultInputWidget;
+
+                        if (fullRender) {
+                            cell.rendered = false;
+                            cell.render();
+
+                            this.loadRecentCellState(cell);
+                            this.bindActionButtons(cell);
+                        }
+                        else {
+                            $(cell.element).find("#inputs")[inputWidget]('refresh');
+                        }
                     }
                 }
             }
-        },
-
-
-        /**
-         * Builds the input div for a function cell, based on the given method object.
-         * @param {Object} method - the method being constructed around.
-         * @returns {String} an HTML string describing the available parameters for the cell.
-         * @private
-         */
-        buildFunctionInputs: function(method, cellId) {
-            var inputDiv = "<div class='kb-cell-params'><table class='table'>";
-            var params = method.properties.parameters;
-            for (var i=0; i<Object.keys(params).length; i++) {
-                var p = 'param' + i;
-                inputDiv += "<tr style='border:none'>" + 
-                                "<td style='border:none'>" + params[p].ui_name + "</td>" + 
-                                "<td style='border:none'><input type='text' name='" + p + "' value=''></input></td>" +
-                                "<td style='border:none'>" + params[p].description + "</td>" +
-                            "</tr>";
-            }
-            inputDiv += "</table></div>";
-
-            return inputDiv;
         },
 
         /**
@@ -404,6 +387,7 @@
             }
         },
 
+        // Function input cell type.
         isFunctionCell: function(cell) {
             return this.checkCellType(cell, this.KB_FUNCTION_CELL);
         },
@@ -412,20 +396,33 @@
             var cellInfo = {}
             cellInfo[this.KB_TYPE] = this.KB_FUNCTION_CELL;
             cellInfo['method'] = method;
+            cellInfo[this.KB_STATE] = [];
+            cellInfo['widget'] = method.properties.widgets.input || this.defaultInputWidget;
 
             cell.metadata[this.KB_CELL] = cellInfo;
         },
 
+        // Function output cell type.
         isOutputCell: function(cell) {
             return this.checkCellType(cell, this.KB_OUTPUT_CELL);
         },
 
-        setOutputCell: function(cell) {
+        setOutputCell: function(cell, widget) {
             var cellInfo = {};
             cellInfo[this.KB_TYPE] = this.KB_OUTPUT_CELL;
+            cellInfo[this.KB_STATE] = [];
+            cellInfo['widget'] = widget;
+
             cell.metadata[this.KB_CELL] = cellInfo;
         },
 
+        setErrorCell: function(cell) {
+            var cellInfo = {};
+            cellInfo[this.KB_TYPE] = this.KB_ERROR_CELL;
+            cell.metadata[this.KB_CELL] = cellInfo;
+        },
+
+        // Backup function code cell type (usually hidden through css... I still think this is superfluous)
         isFunctionCodeCell: function(cell) {
             return this.checkCellType(cell, this.KB_CODE_CELL);
         },
@@ -443,6 +440,219 @@
         },
 
         /**
+         *
+         */
+        getCellDependencies: function(cell, paramValues) {
+            if (!this.isFunctionCell(cell))
+                return;
+
+            var data = [];
+            // get a 'handle' (really just the invocable name) of the input widget
+            var inputWidget = cell.metadata[this.KB_CELL].method.properties.widgets.input || this.defaultInputWidget;
+            var params = cell.metadata[this.KB_CELL]['method'].properties.parameters;
+
+            if (!paramValues) {
+                paramValues = $(cell.element).find('#inputs')[inputWidget]('getParameters') || [];
+            }
+
+
+            // paramValues and method.properties.parameters should be parallel, but check anyway.
+            // assume that those elements between the parameters list and method's params that
+
+            var cellDeps = [];
+            var types = [];
+            var typesHash = {};
+
+            // note - it's method.parameters.param##
+            for (var i=0; i<Object.keys(params).length; i++) {
+                var pid = 'param' + i;
+                var p = params[pid];  // this is the param object itself.
+
+                /* fields: default, description, type, ui_name */
+                var type = p.type;
+                if (!this.ignoredDataTypes[type.toLowerCase()] && paramValues[i]) {
+                    cellDeps.push([type, paramValues[i]]);
+                    if (!typesHash[type]) {
+                        typesHash[type] = 1;
+                        types.push(type);
+                    }
+                }
+            }
+
+            // look up the deps in the data panel.
+            // Cheating for now - needs to be a synchronous call, though! There's no reason for it not to be, if the data's already loaded!
+            var objList = $('#kb-ws').kbaseWorkspaceDataDeluxe('getLoadedData', types);
+
+            // Man, now what. N^2 searching? What a drag.
+            for (var i=0; i<cellDeps.length; i++) {
+                var type = cellDeps[i][0];
+                var found = false;
+                if (objList[type] && objList[type].length > 0) {
+                    for (var j=0; j<objList[type].length; j++) {
+                        if (objList[type][j][1] === cellDeps[i][1]) {
+                            //data.push(objList[type][j]);
+                            data.push([type, 'ws.' + objList[type][j][6] + '.obj.' + objList[type][j][0]]);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (!found) {
+                    data.push(cellDeps[i]);
+                }
+            }
+            return data;
+        },
+
+        /**
+         * Saves a cell's state into its metadata.
+         * This includes marking that state with a timestamp.
+         * We might need to add more stuff as well, but this is a start.
+         * Mostly, it gathers the state from the cell's widget (if it has one) and puts it together
+         * with the timestamp.
+         * {
+         *    state: <cell state>,
+         *    time: <timestamp in ms since the epoch>,
+         * }
+         * This is prepended to the front - so the most recent state is the first element of the array.
+         */
+        saveCellState: function(cell) {
+            // ignore it if it isn't a KBase cell with a widget state to save.
+            if (!this.isFunctionCell(cell) && !this.isOutputCell(cell))
+                return;
+
+            var target;
+            var widget;
+
+            if (this.isFunctionCell(cell)) {
+                widget = cell.metadata[this.KB_CELL].method.properties.widgets.input || this.defaultInputWidget;
+                target = '#inputs';
+            }
+            else if (this.isOutputCell(cell)) {
+                // do output widget stuff.
+                widget = cell.metadata[this.KB_CELL].widget;
+                target = '#output';
+            }
+
+            try {
+                var state;
+                if (widget && $(cell.element).find(target)[widget](['prototype'])['getState']) {
+                    // if that widget can save state, do it!
+                    state = $(cell.element).find(target)[widget]('getState');
+                }
+
+                var timestamp = this.getTimestamp();
+                cell.metadata[this.KB_CELL][this.KB_STATE].unshift({ 'time' : timestamp, 'state' : state });
+                while (this.maxSavedStates && cell.metadata[this.KB_CELL][this.KB_STATE].length > this.maxSavedStates) {
+                    cell.metadata[this.KB_CELL][this.KB_STATE].pop();
+                }
+            }
+            catch(error) {
+                this.dbg('Unable to save state for cell:');
+                this.dbg(cell);
+            }
+        },
+
+        /**
+         * Loads the most recent cell state (i.e. the top of the stack) of the given cell.
+         * If that state is undefined (or if the state array is undefined or not an array), nothing is done.
+         * @param {Object} cell - the cell to fetch the most recent cell state from
+         * @returns the most recent cell state, in whatever form that state takes (scalar, array, object, etc.)
+         * @private
+         */
+        loadRecentCellState: function(cell) {
+            var state = this.getRecentState(cell);
+            if (state) {
+                var target;
+                var widget;
+
+                // if it's labeled as a function cell do that.
+                if (this.isFunctionCell(cell)) {
+                    widget = cell.metadata[this.KB_CELL].method.properties.widgets.input || this.defaultInputWidget;
+                    target = "#inputs";
+                }
+                // if it's labeled as an output cell do that.
+                else if (this.isOutputCell(cell)) {
+                    // do output widget stuff.
+                    widget = cell.metadata[this.KB_CELL].widget;
+                    target = "#output";
+                }
+                // it might not be either! if we don't have both a target and widget, don't do anything!
+                if (target && widget) {
+                    try {
+                        if ($(cell.element).find(target)[widget](['prototype'])['loadState']) {
+                            $(cell.element).find(target)[widget]('loadState', state.state);
+                            // later, do something with the timestamp.
+                        }
+                    } catch(err) {
+                        // just ignore it and move on.
+                        this.dbg('Unable to load cell state! Ignoring the following cell:')
+                        this.dbg(cell);
+                        this.dbg(err);
+                    }
+                }
+            }
+        },
+
+        /**
+         * Returns the entire state array from the given cell.
+         * If there is not an array present, or if the state object is not an array, then an empty list is returned.
+         * @param {Object} cell - the cell to fetch the state array from
+         * @returns {Array} an array of states for that cell
+         * @private
+         */
+        getCellStateArray: function(cell) {
+            if (this.isFunctionCell(cell) || this.isOutputCell(cell)) {
+                var stateArr = cell.metadata[this.KB_CELL][this.KB_STATE];
+                // if it's an array, return it.
+                if (Object.prototype.toString.call(stateArr) === "[object Array]")
+                    return stateArr;
+            }
+            // if the cell doesn't have a state array, or if it's NOT an array, return the empty array.
+            return [];
+        },
+
+        /**
+         * Saves the state of all cells into their respective arrays.
+         * @public
+         */
+        saveAllCellStates: function() {
+            var cells = IPython.notebook.get_cells();
+            $.each(cells, $.proxy(function(idx, cell) {
+                this.saveCellState(cell);
+            }, this));
+        },
+
+        /**
+         * Loads the most recently saved state into all cells.
+         * @public
+         */
+        loadAllRecentCellStates: function() {
+            var cells = IPython.notebook.get_cells();
+            $.each(cells, $.proxy(function(idx, cell) {
+                this.loadRecentCellState(cell);
+            }, this));
+        },
+
+        /**
+         * Fetches the most recent cell state. If the cell state is an array, it gets the first element,
+         * if it's NOT an array, it just returns that state.
+         * This *should* make things still functional for the older (non-array-based) stateful cells.
+         * XXX: eventually update this to just array, once we're out of dev-panic-mode and closer to production.
+         */
+        getRecentState: function(cell) {
+            var state;
+            if (this.isFunctionCell(cell) || this.isOutputCell(cell)) {
+                var stateList = cell.metadata[this.KB_CELL][this.KB_STATE];
+                if (Object.prototype.toString.call(stateList) === "[object Array]")
+                    state = stateList[0];
+                else
+                    state = stateList;
+            }
+            return state;
+        },
+
+        /**
          * @method bindRunButton
          * @private
          */
@@ -451,15 +661,24 @@
             return (
                 function(event) {
                     event.preventDefault();
+                    // get the cell
                     var cell = IPython.notebook.get_selected_cell();
-                    var paramList = [];
-                    $(cell.element).find("[name^=param]").filter(":input").each(function(key, field) {
-                        console.log(field.name + "=" + field.value);
-                        paramList.push(field.value);
-                    });
-                    var method = cell.metadata[self.KB_CELL].method;
 
+                    // get a 'handle' (really just the invocable name) of the input widget
+                    var inputWidget = cell.metadata[self.KB_CELL].method.properties.widgets.input || self.defaultInputWidget;
+
+                    // get the list of parameters and save the state in the cell's metadata
+                    var paramList = $(cell.element).find("#inputs")[inputWidget]('getParameters');
+                    self.saveCellState(cell);
+                    self.getCellDependencies(cell);
+
+                    // var state = $(cell.element).find("#inputs")[inputWidget]('getState');
+                    // cell.metadata[self.KB_CELL][self.KB_STATE] = state;
+
+                    // Run the method.
+                    var method = cell.metadata[self.KB_CELL].method;
                     self.runCell()(cell, method.service, method.title, paramList);
+                    $(cell.element).find("#last-run").html("Last run: " + self.readableTimestamp(self.getTimestamp()));
                 }
             );
         },
@@ -503,7 +722,7 @@
                 var cellType = cell.metadata[this.KB_CELL];
                 if (cellType) {
                     this.removeCellEditFunction(cell);
-                    if (this.isFunctionCell(cell)) { //cellType[this.KB_TYPE] == this.FUNCTION_CELL) {
+                    if (this.isFunctionCell(cell)) { 
                         this.bindActionButtons(cell);
                     }
                 }
@@ -523,9 +742,6 @@
             return function(cell, service, method, params) {
                 var nb = IPython.notebook;
                 var currentIndex = nb.get_selected_index();
-                var codeCell = nb.insert_cell_below('code', currentIndex);
-                self.setCodeCell(codeCell);
-                codeCell.element.css('display', 'none');
 
                 var callbacks = {
                     'execute_reply' : function(content) { self.handleExecuteReply(cell, content); },
@@ -535,11 +751,15 @@
                     'input_request' : function(content) { self.handleInputRequest(cell, content); },
                 };
 
+                // ignore making code cells for now.
+                // var codeCell = nb.insert_cell_below('code', currentIndex);
+                // self.setCodeCell(codeCell);
+                // codeCell.element.css('display', 'none');
+
                 var code = self.buildRunCommand(service, method, params);
-                codeCell.set_text(code);
-                codeCell.output_area.clear_output(true, true, true);
-                codeCell.set_input_prompt('*');
-//                console.debug('Running function: ' + service + '.' + method);
+                // codeCell.set_text(code);
+                // codeCell.output_area.clear_output(true, true, true);
+                // codeCell.set_input_prompt('*');
 
                 $(cell.element).find('#kb-func-progress').css({'display': 'block'});
                 nb.kernel.execute(code, callbacks, {silent: true});
@@ -556,14 +776,26 @@
          * @private
          */
         buildRunCommand: function(service, method, params) {
-            var cmd = "import biokbase.narrative.common.service as Service\n" +
-                      "method = Service.get_service('" + service + "').get_method('" + method + "')\n" +
-                      "import os; os.environ['KB_WORKSPACE_ID'] = '" + this.ws_id + "'\n" +
-                      "os.environ['KB_AUTH_TOKEN'] = '" + this.ws_auth + "'\n";
+            // very nice quote-escaper found here:
+            // http://stackoverflow.com/questions/770523/escaping-strings-in-javascript
+            // and
+            // http://phpjs.org/functions/addslashes/
+            var addSlashes = function(str) {
+                return (str + '').replace(/[\\"']/g, '\\$&').replace(/\u0000/g, '\\0');
+            };
 
-            var paramList = params.map(function(p) { return '"' + p + '"'; });
+            var escService = addSlashes(service);
+            var escMethod = addSlashes(method);
+            var cmd = "import biokbase.narrative.common.service as Service\n" +
+                      "method = Service.get_service('" + escService + "').get_method('" + escMethod + "')\n";
+
+            var paramList = params.map(
+                function(p) { 
+                    return "'" + addSlashes(p) + "'"; 
+                }
+            );
             cmd += "method(" + paramList + ")";
-//            console.debug(cmd);
+
             return cmd;
         },
 
@@ -611,7 +843,42 @@
          * @private
          */
         handleExecuteReply: function (cell, content) {
-            console.debug("Done running the function", content);
+            // this.dbg('[handleExecuteReply]');
+            // // this.dbg(content);
+
+            // this.dbg(cell);
+            /* This catches and displays any errors that don't get piped through
+             * the back-end service.py mechanism.
+             * Any code that makes it that far gets reported through the output
+             * mechanism and ends here with an 'ok' message.
+             */
+            if (content.status === 'error') {
+                var errorBlob = {
+                    msg : content.evalue,
+                    type : content.ename,
+                };
+
+                if (cell && cell.metadata && cell.metadata['kb-cell'] &&
+                    cell.metadata['kb-cell'].method)
+                    errorBlob.method_name = cell.metadata['kb-cell'].method.title;
+
+                var removeVt = function(line) {
+                    return line.replace(/\[\d+(;\d+)?m/g, '');
+                };
+
+                var errTb = content.traceback.map(function(line) {
+                    return {
+                        filename: null,
+                        function: null,
+                        line: null,
+                        text: removeVt(line)
+                    };
+                });
+
+                errorBlob.traceback = errTb;
+                this.createErrorCell(cell, JSON.stringify(errorBlob));
+
+            }
             this.showCellProgress(cell, "DONE", 0, 0);
             //this.set_input_prompt(content.execution_count);
             $([IPython.events]).trigger('set_dirty.Notebook', {value: true});
@@ -629,7 +896,7 @@
          * @private
          */
         handleInputRequest: function (cell, content) {
-            console.log("handle input request called");
+            this.dbg("handle input request called");
             return;
             //this.output_area.append_raw_input(content);
         },
@@ -638,7 +905,7 @@
          * @private
          */
         handleClearOutput: function (cell, content) {
-            console.debug("handle clear output called");
+            this.dbg("handle clear output called");
             return;
             //this.clear_output(content.stdout, content.stderr, content.other);
         },
@@ -663,58 +930,56 @@
                             offs += 1; // blank line, move offset
                         }
                         else {
-                            // look for @@S, @@P, @@D, or @@E
-                            var matches = line.match(/^@@([SPDE])(.*)/);
+                            // look for @@S, @@P, @@D, @@G, or @@E
+                            var matches = line.match(/^@@([SPDGE])(.*)/);
                             if (matches) { // if we got one
-                                if (matches[1] === 'S') {
-                                    // if we're starting, init the progress bar.
+                                switch(matches[1]) {
+                                    case 'S':
+                                        // if we're starting, init the progress bar.
+                                        break;
+
+                                    case 'D':
+                                        // were done, so hide the progress bar (wait like a second or two?)
+                                        self.resetProgress(cell);
+                                        break;
+
+                                    case 'P':
+                                        var progressInfo = matches[2].split(',');
+                                        if (progressInfo.length == 3) {
+                                            self.showCellProgress(cell, progressInfo[0], progressInfo[1], progressInfo[2]);
+                                            offs += line.length;
+                                            if (index < lines.length - 1)
+                                                offs += 1;
+                                        }
+                                        else
+                                            done = true;
+                                        break;
+
+                                    case 'E':
+                                        var errorJson = matches[2];
+                                        errorJson = errorJson.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\$/g, "&#36;");
+                                        self.createErrorCell(cell, errorJson);
+                                        break;
+
+                                    case 'G':
+                                        var debug = matches[2];
+                                        self.dbg("[KERNEL] " + debug);
+                                        break;
+
+                                    default:
+                                        // by default just dump it to the console
+                                        self.dbg("[UNKNOWN TAG] " + line);
+                                        break;
                                 }
-                                else if (matches[1] === 'D') {
-                                    // were done, so hide the progress bar (wait like a second or two?)
-                                    self.resetProgress(cell);
-                                }
-                                else if (matches[1] === 'P') {
-                                    // progress! capture the progress info and pass it along.
-                                    var progressInfo = matches[2].split(',');
-                                    if (progressInfo.length == 3) {
-                                        self.showCellProgress(cell, progressInfo[0], progressInfo[1], progressInfo[2]);
-                                        offs += line.length;
-                                        if (index < lines.length - 1)
-                                            offs += 1;
-                                    }
-                                    else
-                                        done = true;
-                                }
-                                else if (matches[1] === 'E') {
-                                    // Error!
-                                    var errorJson = matches[2];
-                                    self.createErrorCell(cell, errorJson);
-//                                    self.createOutputCell(cell, 'kbaseNarrativeError({error: ' + errorJson + '})');
-                                    self.dbg("Narrative error: " + errorJson);
-                                }
-                                else if (matches[1] === 'G') {
-                                    // Debug statement.
-                                    var debug = matches[2];
-                                    self.dbg("[KERNEL] " + debug);
-                                }
+                                return;
                             }
-                            // No progress marker on non-empty line => final output of program?
+                            // No progress marker on non-empty line => treat as final output of program.
                             else {
-                                // XXX: @ and # should probably be swapped in meaning
-                                // if (line.match(/^#/)) {
-                                //     // log lines starting with '@'
-                                //     console.info("[KERNEL] " + line.substr(1, line.length).trim());
-                                //     // consume data
-                                //     offs += line.length;
-                                // }
-                                // else {
-                                    // save the line
-                                    result += line;
-                                    // all but the last line should have \n appended
-                                    if (index < lines.length - 1) {
-                                        result += "\n";
-                                    }
-                                // }
+                                result += line;
+                                // all but the last line should have \n appended
+                                if (index < lines.length - 1) {
+                                    result += "\n";
+                                }
                             }
                         }
                     }
@@ -729,17 +994,60 @@
             }
         },
 
+        /**
+         * Creates an error cell and populates it with the JSON error object.
+         */
         createErrorCell: function(cell, errorJson) {
             var error = {
                 'widget': this.errorWidget,
                 'data': '{"error": ' + errorJson + "}",
                 'embed': true
             };
-            this.createOutputCell(cell, error);
+
+            var widget = this.errorWidget;
+
+            var errorCell = this.addErrorCell(IPython.notebook.find_cell_index(cell), widget);
+
+            // kinda ugly, but concise. grab the method. if it's not falsy, fetch the title from it.
+            // worst case, it'll still be falsy, and we can deal with it in the header line.
+            var methodName = cell.metadata[this.KB_CELL].method;
+            if (methodName)
+                methodName = methodName.title;
+
+            var uuid = this.uuidgen();
+            var errCellId = 'kb-cell-err-' + uuid;
+
+            var widgetInvoker = this.errorWidget + "({ \"error\" : " + errorJson + "});";
+
+            var header = '<span class="kb-err-desc"><b>' + 
+                            (methodName ? methodName : 'Unknown method') + 
+                            '</b> - Error</span><span class="pull-right kb-func-timestamp">' + 
+                            this.readableTimestamp(this.getTimestamp()) +
+                            '</span>' + 
+                         '';
+
+            var cellText = '<div class="kb-cell-error" id="' + errCellId + '">' +
+                                '<div class="panel panel-danger">' + 
+                                    '<div class="panel-heading">' + header + '</div>' +
+                                    '<div class="panel-body"><div id="error"></div></div>' +
+                                '</div>' +
+                           '</div>\n' +
+                           '<script>' +
+                           '$("#' + errCellId + ' > div > div > div#error").' + widgetInvoker +
+                           '</script>';
+
+            errorCell.set_text(cellText);
+            errorCell.rendered = false; // force a render
+            errorCell.render();
+
+            this.resetProgress(cell);
+            this.trigger('updateData.Narrative');
         },
 
         /**
          * Result is an object with this structure:
+         * cell = the invoking function cell.
+         * result = the result data object from the Python call.
          * widget - the widget to use (if null, then use kbaseDefaultNarrativeOutput)
          * data - the object to be passed in to the widget
          * embed - if true, then embed the widget and render it.
@@ -748,15 +1056,29 @@
             if (typeof result === 'string')
                 result = JSON.parse(result);
 
-            console.log(result);
-
-            if (!result.embed) {
+            // If result.embed is false,
+            // or if the result doesn't have any data to put into a widget,
+            // don't make a widget! Assume that this will have thrown an error somewhere
+            // along the way.
+            //
+            // Note that an empty object is not null! So if result.data = {}, it'll still do something.
+            if (!result.embed || result.data === null || result.data === undefined) {
                 //do something.
                 return;
             }
 
-            var outputCell = this.addOutputCell(IPython.notebook.find_cell_index(cell));
+            var widget = result.widget || this.defaultOutputWidget;
+
+            var outputCell = this.addOutputCell(IPython.notebook.find_cell_index(cell), widget);
+
+            // kinda ugly, but concise. grab the method. if it's not falsy, fetch the title from it.
+            // worst case, it'll still be falsy, and we can deal with it in the header line.
+            var methodName = cell.metadata[this.KB_CELL].method;
+            if (methodName)
+                methodName = methodName.title;
+
             var uuid = this.uuidgen();
+            var outCellId = 'kb-cell-out-' + uuid;
 
             // set up the widget line
             var widgetInvoker = "";
@@ -765,18 +1087,29 @@
             else
                 widgetInvoker = this.defaultOutputWidget + "({'data' : " + result.data + "});";
 
-            var cellText = ['<div id="'+uuid+'"></div>',
-                            '<script>',
-                            '$("#'+uuid+'").' + widgetInvoker, 
-                            // Make the element a little bigger,
-                            '$("#'+uuid+'").css({margin: "-10px"});',
-                            // Disable most actions on this element'
-                            '$("#'+uuid+'").off("click dblclick keydown keyup keypress focus");',
-                            '</script>'].join('\n');
-            console.log(cellText);
+            var header = '<span class="kb-out-desc"><b>' + 
+                            (methodName ? methodName : 'Unknown method') + 
+                            '</b> - Output</span><span class="pull-right kb-func-timestamp">' + 
+                            this.readableTimestamp(this.getTimestamp()) +
+                            '</span>' + 
+                         '';
+
+            var cellText = '<div class="kb-cell-output" id="' + outCellId + '">' +
+                                '<div class="panel panel-default">' + 
+                                    '<div class="panel-heading">' + header + '</div>' +
+                                    '<div class="panel-body"><div id="output"></div></div>' +
+                                '</div>' +
+                           '</div>\n' +
+                           '<script>' +
+                           '$("#' + outCellId + ' > div > div > div#output").' + widgetInvoker +
+                           '</script>';
+
             outputCell.set_text(cellText);
             outputCell.rendered = false; // force a render
             outputCell.render();
+
+            this.resetProgress(cell);
+            this.trigger('updateData.Narrative');
         },
 
         /**
@@ -813,7 +1146,7 @@
                 $progressMsg.text("Completed");
                 percentDone = 100;
                 $progressBar.css('width', '100%');
-                $(cell.element).find("#kb-func-progress").fadeOut(1000);
+                $(cell.element).find("#kb-func-progress").fadeOut(1000, $.proxy(function() { this.resetProgress(cell); }, this));
             }
             else {
                 $progressMsg.text("Step " + done + " / " + total + ": " + name);
@@ -833,14 +1166,20 @@
          * @private
          * @return id of <div> inside cell where content can be placed
          */
-        addOutputCell: function(currentIndex) {
-            var nb = IPython.notebook;
-            var cell = nb.insert_cell_below('markdown', currentIndex);
+        addOutputCell: function(currentIndex, widget) {
+            var cell = IPython.notebook.insert_cell_below('markdown', currentIndex);
 
-            cell.metadata['kb-cell'] = 'output';
+            this.setOutputCell(cell, widget);
             this.removeCellEditFunction(cell);
 
-            return( cell );
+            return cell;
+        },
+
+        addErrorCell: function(currentIndex) {
+            var cell = IPython.notebook.insert_cell_below('markdown', currentIndex);
+            this.setErrorCell(cell);
+            this.removeCellEditFunction(cell);
+            return cell;
         },
 
         /** Not really used right now. */
@@ -909,31 +1248,20 @@
          * @returns this
          */
         render: function() {
+            var creator = IPython.notebook.metadata.creator;
+            if (creator) {// insert agnosticism here
+                $('.creator-stamp').text('Created by ' + creator);
+            }
+
             this.rebindActionButtons();
             this.hideGeneratedCodeCells();
+            var cells = IPython.notebook.get_cells();
+            for (var i=0; i<cells.length; i++) {
+                this.checkCellMetadata(cells[i]);
+            }
+            this.loadAllRecentCellStates();
             this.trigger('updateData.Narrative');
             return this;
-        },
-
-        /**
-         * Log in to all the widgets.
-         *
-         * @param token
-         * @returns this
-         */
-        loggedIn: function(token) {
-            this.ws_client = new workspaceService(this.options.workspaceURL);
-            this.ws_auth = token;
-            var un = token.match(/un=[\w_]+|/);
-            this.ws_user = un[0].substr(3, un[0].length - 3);
-            // grab ws_id to give to, e.g., upload widget
-
-            //this.dataTableWidget.loggedIn(this.ws_client, this.ws_auth).ws_id;
-            this.workspace("id", this.ws_id); // add to global accessor
-            // create/refresh the upload dialog, which needs login to populate types
-            this.uploadWidget = this.uploadWidget_dlg.kbaseUploadWidget(this.uploadWidget_opts);
-            //this.uploadWidget.createDialog(); -- redundant
-            this.render();
         },
 
         /**
@@ -943,7 +1271,8 @@
          * @returns this
          */
         loggedOut: function(token) {
-            this.dataTableWidget.loggedOut(token);
+            if (this.dataTableWidget)
+                this.dataTableWidget.loggedOut(token);
             this.ws_client = null, this.ws_auth = null;
         },
 
@@ -964,6 +1293,43 @@
                 var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
                 return v.toString(16);});
         },
+
+        /**
+         * Returns a timestamp in milliseconds since the epoch.
+         * (This is a one-liner, but kept as a separate function in case our needs change. 
+         * Maybe we'll want to use UTC or whatever...)
+         * @public
+         */
+        getTimestamp: function() {
+            return new Date().getTime();
+        },
+
+        /**
+         * Converts a timestamp to a simple string.
+         * Do this American style - HH:MM:SS MM/DD/YYYY
+         *
+         * @param {string} timestamp - a timestamp in number of milliseconds since the epoch.
+         * @return {string} a human readable timestamp
+         */
+        readableTimestamp: function(timestamp) {
+            var format = function(x) {
+                if (x < 10)
+                    x = '0' + x;
+                return x;
+            };
+
+            var d = new Date(timestamp);
+            var hours = format(d.getHours());
+            var minutes = format(d.getMinutes());
+            var seconds = format(d.getSeconds());
+            var month = d.getMonth()+1;
+            var day = format(d.getDate());
+            var year = d.getFullYear();
+
+            return hours + ":" + minutes + ":" + seconds + ", " + month + "/" + day + "/" + year;
+        },
+
+
     });
 
 })( jQuery );

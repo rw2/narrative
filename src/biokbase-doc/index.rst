@@ -3,16 +3,17 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to KBase's documentation!
-=================================
+KBase Narrative Documentation
+===============================
 
 Contents:
 
 .. toctree::
    :maxdepth: 2
 
-   service
-   microbes
+   functions-tut
+   functions-quick
+   functions
 
 Indices and tables
 ==================

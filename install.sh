@@ -97,6 +97,10 @@ source $installPath/$venv/bin/activate
 $PYTHON setup.py install
 cd ..
 
+# Delete "security" directory that is generated IPython at runtime, it can
+# cause odd permission issues in runtime container
+rm -rf "$( cd $(dirname ${BASH_SOURCE[0]}) && pwd)/src/notebook/ipython_profiles/profile_narrative/security"
+
 #printf "Installing 'biokbase' package into the virtual environment $venv... \n"
 #cd src/biokbase
 #$PYTHON setup.py install
@@ -109,6 +113,9 @@ printf 'source %s/bin/activate
 export NARRATIVEDIR=%s
 export IPYTHONDIR=$NARRATIVEDIR/notebook/ipython_profiles
 
+cp $NARRATIVEDIR/config.json $IPYTHONDIR/profile_narrative/kbase_templates/static/kbase/
+python $NARRATIVEDIR/biokbase/narrative/common/service_root.py -f $IPYTHONDIR/profile_narrative/kbase_templates/static/kbase/services.json
+
 ipython $* --NotebookManager.notebook_dir=~/.narrative --profile=%s
 ' "$installPath/$venv" "$( cd $(dirname ${BASH_SOURCE[0]}) && pwd)/src" "$profile_name" &> $installPath/$venv/bin/run_notebook.sh
 
@@ -119,9 +126,14 @@ printf "Creating start script for KBase narrative running behind reverse proxy s
 printf '#!/bin/bash
 source %s/bin/activate
 export NARRATIVEDIR=%s
+export HOME=/tmp
+export MPLCONFIGDIR=/tmp
 export IPYTHONDIR=$NARRATIVEDIR/notebook/ipython_profiles
 
-ipython notebook --profile=narrative --NotebookApp.base_project_url="/narrative/$1" --NotebookApp.base_kernel_url="/narrative/$1" --NotebookApp.open_browser="False" --ip="*"
+cp $NARRATIVEDIR/config.json $IPYTHONDIR/profile_narrative/kbase_templates/static/kbase
+python $NARRATIVEDIR/biokbase/narrative/common/service_root.py -f $IPYTHONDIR/profile_narrative/kbase_templates/static/kbase/services.json
+
+ipython notebook --profile=narrative --NotebookApp.base_project_url="/narrative" --NotebookApp.base_kernel_url="/narrative" --NotebookApp.open_browser="False" --ip="*"
 ' "$installPath/$venv" "$( cd $(dirname ${BASH_SOURCE[0]}) && pwd)/src" &> $installPath/$venv/bin/run_magellan_narrative.sh
 
 chmod +x $installPath/$venv/bin/run_magellan_narrative.sh

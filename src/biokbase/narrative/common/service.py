@@ -16,31 +16,47 @@ import logging
 import os
 import sys
 import time
+import traceback
 # Third-party
 import IPython.utils.traitlets as trt
+from IPython.core.application import Application
 # Local
-from biokbase.narrative.common import kbtypes
+from biokbase.narrative.common import kbtypes, kblogging
 
-## Logging boilerplate
-
+# Init logging.
 _log = logging.getLogger(__name__)
-# turn on debugging by setting environment variable KBASE_DEBUG
-if os.environ.get("KBASE_DEBUG", None):
-    _log.setLevel(logging.DEBUG)
-else:
-    _log.setLevel(logging.WARN)
-# set custom log format
-_h = logging.StreamHandler()
-_h.setFormatter(logging.Formatter("%(levelname)s %(asctime)s %(module)s: %(message)s"))
-_log.addHandler(_h)
 
 ## Globals
 
+from url_config import URLS
 
-class URLS:
-    workspace = "http://kbase.us/services/workspace"
-    invocation = "https://kbase.us/services/invocation"
-    fba = "https://kbase.us/services/fba_model_services"
+# class Struct:
+#     def __init__(self, **args):
+#         self.__dict__.update(args)
+
+# try:
+#     nar_path = os.environ["NARRATIVEDIR"]
+#     config_json = open(os.path.join(nar_path, "config.json")).read()
+#     config = json.loads(config_json)
+#     url_config = config[config['config']]  #fun, right?
+
+#     URLS = Struct(**url_config)
+# except:
+#     url_dict = {
+#         "workspace" : "https://kbase.us/services/ws/",
+#         "invocation" : "https://kbase.us/services/invocation",
+#         "fba" : "https://kbase.us/services/KBaseFBAModeling",
+#         "genomeCmp" : "https://kbase.us/services/genome_comparison/jsonrpc",
+#         "trees" : "http://dev19.berkeley.kbase.us:7047"
+#     }
+#     URLS = Struct(**url_dict)
+
+# class URLS:
+#     workspace = "https://kbase.us/services/ws/"
+#     invocation = "https://kbase.us/services/invocation"
+#     #fba = "http://140.221.84.183:7036"
+#     fba = "https://kbase.us/services/KBaseFBAModeling"
+#     genomeCmp = "http://140.221.85.57:8283/jsonrpc"
 
 ## Exceptions
 
@@ -72,10 +88,28 @@ class DuplicateServiceError(ServiceError):
 class ServiceMethodError(ServiceError):
     """Base class for all ServiceMethod errors"""
 
-    def __init__(self, method, errmsg):
+    def __init__(self, method, errmsg, tb=None):
         msg = "in function '{}': {}".format(method.name, errmsg)
         ServiceError.__init__(self, msg)
         self.add_info('method_name', method.name)
+        if tb is not None:
+            self.add_info('traceback',
+                          self.traceback_dict(tb))
+
+    TB_KEYS = 'filename', 'line', 'function', 'text'
+
+    def traceback_dict(self, tb):
+        """Extract and reformat traceback as a dict, for reporting in narrative.
+
+        :param tb: List of stack trace entries.
+        :type tb: list
+        :return: List where each entry is converted into a dict with
+                 key/value pairs corresponding to the quadruple given above.
+        :rtype: dict
+        """
+        etb = traceback.extract_tb(tb)
+        return [{self.TB_KEYS[i]: entry[i] for i in xrange(len(entry))}
+                for entry in etb]
 
 
 class ServiceMethodParameterError(ServiceMethodError):
@@ -142,6 +176,14 @@ def get_func_info(fn):
             typeobj = eval(desc.strip())
             params[name]['type'] = typeobj
 
+        # :default (value of parameter)
+        elif line.startswith(":default"):
+            _, name, value = line.split(":", 2)
+            name = name[8:].strip()  # skip 'default '
+            if not name in params:
+                raise ValueError("'default' without 'param' for {}".format(name))
+            params[name]['default'] = value.strip() # XXX: should allow quoting
+
         # :ui_name (of parameter) - the name that should be displayed in the user interface
         elif line.startswith(":ui_name"):
             _, name, ui_name = line.split(":", 2)
@@ -154,7 +196,7 @@ def get_func_info(fn):
         # :return - name of thing to return
         elif line.startswith(":return"):
             _1, _2, desc = line.split(":", 2)
-            return_['desc'] = desc
+            return_['desc'] = desc.strip()
 
         # :rtype - type of thing to return
         elif line.startswith(":rtype"):
@@ -188,8 +230,15 @@ def get_func_info(fn):
         type_ = params[name]['type']
         desc = params[name]['desc']
         ui_name = params[name].get('ui_name', name)  # use parameter name if no ui_name is given
-        r_params.append(type_(desc=desc, ui_name=ui_name))
-    if return_ is None:
+        if 'default' in params[name]:
+            # set default value
+            dflt = params[name]['default']
+            pvalue = type_(dflt, desc=desc, ui_name=ui_name)
+        else:
+            # no default value
+            pvalue = type_(desc=desc, ui_name=ui_name)
+        r_params.append(pvalue)
+    if not return_:
         r_output = None
     else:
         r_output = return_['type'](desc=return_['desc'])
@@ -276,6 +325,8 @@ class Service(trt.HasTraits):
     desc = trt.Unicode()
     #: Version number of the service, see :class:`VersionNumber` for format
     version = kbtypes.VersionNumber()
+    #: Flag for making all service methods invisible to UI
+    invisible = trt.Bool(False)
 
     def __init__(self, **meta):
         """Initialize a Service instance.
@@ -308,6 +359,9 @@ class Service(trt.HasTraits):
         :raise: If method is None, anything raised by :class:`ServiceMethod` constructor
         """
         if not method:
+            # If the service isn't visible, pass that down into the method
+            if self.invisible:
+                kw['visible'] = False
             method = ServiceMethod(**kw)
         self.methods.append(method)
         return method
@@ -361,7 +415,7 @@ class LifecycleSubject(object):
     change as long as the invariants 0 <= stage <= num_stages
     and 1 <= num_stages hold. Note that 0 is a special stage number
     meaning 'not yet started'.
-        """
+    """
     def __init__(self, stages=1):
         if not isinstance(stages, int) or stages < 1:
             raise ValueError("Number of stages ({}) must be > 0".format(stages))
@@ -413,6 +467,11 @@ class LifecycleSubject(object):
         if not self._done:
             self._done = True
             self._event('error', code, err)
+
+    def debug(self, msg):
+        """Debugging message.
+        """
+        self._event('debug', msg)
 
     # get/set 'stage' property
     
@@ -472,6 +531,10 @@ class LifecycleObserver(object):
         """Called on fatal error"""
         pass
 
+    def debug(self, msg):
+        """Debugging message"""
+        pass
+
 
 class LifecycleHistory(LifecycleObserver):
     """Record duration between start/end in lifecycle events.
@@ -516,14 +579,14 @@ class LifecycleHistory(LifecycleObserver):
         pass
 
     def estimated_runtime(self, params):
-        """Based on history and params, estimate runtime for service.
+        """Based on history and params, estimate runtime for function.
 
         """
-        dur = self._history.get_durations()
+        dur = self.get_durations()
         if len(dur) == 0:
             estimate = -1  # no @!$%# idea
         else:
-            # dumb: ignore params
+            # dumb: ignore params, take mean
             estimate = sum(dur) / len(dur)
         return estimate
 
@@ -574,6 +637,72 @@ class LifecyclePrinter(LifecycleObserver):
     def error(self, code, err):
         self._write('E' + err.as_json())
 
+    def debug(self, msg):
+        self._write('G' + msg)
+
+
+class LifecycleLogger(LifecycleObserver):
+    """Log lifecycle messages in a simple but structured format,
+    to a file.
+    """
+    MAX_MSG_LEN = 240  # Truncate message to this length, in chars
+                       # Actual display may be a bit longer to indicate
+                       # that the message was indeed truncated.
+
+    def __init__(self, name, debug=False):
+        """Create a Python logging.Logger with the given name, under the existing
+        IPython logging framework.
+
+        :param name: Name of logger
+        :type name: str
+        :param debug: Whether to set debug as the log level
+        :type debug: bool
+        """
+        self._name = name
+        # use the IPython application singleton's 'log' trait
+        # self._log = Application.instance().log
+        self._log = kblogging.get_logger(name)
+        if debug:
+            self._log.setLevel(logging.DEBUG)
+        else:
+            self._log.setLevel(logging.INFO)
+        self._is_debug = debug
+        self._start_time = None
+
+    def _write(self, level, event, msg):
+        if msg and (len(msg) > self.MAX_MSG_LEN):
+            msg = msg[:self.MAX_MSG_LEN] + " [..]"
+        # replace newlines with softer dividers
+        msg = msg.replace("\n\n", "\n").replace("\n", " // ").replace("\r", "")
+        # log the whole tamale
+        self._log.log(level, "{} {}".format(event, msg))
+
+    def started(self, params):
+        # note: quote params so the logging can handle spaces inside them
+        pstr = str(params).replace('"', '\\"')  # escape embedded quotes
+        self._write(logging.INFO, "func.begin", 'params="{}"'.format(pstr))
+        self._start_time = time.time()
+
+    def done(self):
+        t = time.time()
+        if self._start_time is not None:
+            dur = t - self._start_time
+            self._start_time = None
+        else:
+            dur = -1
+        self._write(logging.INFO, "func.end", "dur={:.3g}".format(dur))
+
+    def stage(self, n, total, name):
+        self._write(logging.INFO, "func.stage.{}".format(name),
+                    "num={:d} total={:d}".format(n, total))
+
+    def error(self, code, err):
+        self._write(logging.ERROR, "func.error code={:d}".format(code), "msg={}".format(err))
+
+    def debug(self, msg):
+        if self._is_debug:
+            self._write(logging.DEBUG, "func.debug", "msg={}".format(msg))
+
 
 class ServiceMethod(trt.HasTraits, LifecycleSubject):
     """A method of a service.
@@ -612,7 +741,7 @@ class ServiceMethod(trt.HasTraits, LifecycleSubject):
 
 
     def __init__(self, status_class=LifecycleHistory, quiet=False,
-                 func=None, **meta):
+                 func=None, visible=True, **meta):
         """Constructor.
 
         :param status_class: Subclass of LifecycleObserver to instantiate
@@ -621,13 +750,15 @@ class ServiceMethod(trt.HasTraits, LifecycleSubject):
         :type status_class: type
         :param bool quiet: If True, don't add the printed output
         :param func: Function to auto-wrap, if present
+        :param visible: Whether this service is 'visible' to the UI
         :param meta: Other key/value pairs to set as traits of the method.
         """
         LifecycleSubject.__init__(self)
+        self.name, self.full_name, self.run = "", "", None
+        self._visible = visible
         self._history = status_class(self)
         self.register(self._history)
-        self._lpr = None
-        self.quiet(quiet)
+        self._observers = []  # keep our own list of 'optional' observers
         # set traits from 'meta', if present
         for key, val in meta.iteritems():
             if hasattr(self, key):
@@ -638,18 +769,23 @@ class ServiceMethod(trt.HasTraits, LifecycleSubject):
             self.desc = get_func_desc(func)
             params, output, vis_info = get_func_info(func)
             self.set_func(func, tuple(params), (output,), vis_info)
+        # Set logging level. Do this last so it can use func. name
+        self.quiet(quiet)
 
     def quiet(self, value=True):
         """Control printing of status messages.
         """
         if value:
-            if self._lpr:
-                self.unregister(self._lpr)
-                self._lpr = None
+            # make it quiet
+            if self._observers:  # for idempotence
+                map(self.unregister, self._observers)
+                self._observers = []
         else:
-            if not self._lpr:
-                self._lpr = LifecyclePrinter()
-                self.register(self._lpr)
+            # make some noise
+            if not self._observers:  # for idempotence
+                self._observers = [LifecyclePrinter(),
+                                   LifecycleLogger(self.full_name, debug=True)]
+                map(self.register, self._observers)
 
     def set_func(self, fn, params, outputs, vis_info):
         """Set the main function to run, and its metadata.
@@ -660,16 +796,17 @@ class ServiceMethod(trt.HasTraits, LifecycleSubject):
         :param fn: Function object to run
         :param params: tuple of traits describing input parameters
         :param outputs: tuple of traits, describing the output value(s)
-        :param vis_info: dict of 'widget' and 'embed_widget', with the name 
-        of the default widget and whether it should automatically be shown
-        'embed' defaults to True
-
+        :param vis_info: visualization information, with two keys:
+                           * 'widget':  Name of the default widget.
+                           * 'embed_widget': Whether it should automatically be shown, default = True.
+        :type vis_info: dict
         :raise: ServiceMethodParameterError, if function signature does not match
                 ValueError, if None is given for a param
         """
         self.run = fn
         if self.name is None:
             self.name = fn.__name__
+        self.full_name = '.'.join([fn.__module__, self.name])
 
         # Handle parameters
         for i, p in enumerate(params):
@@ -721,7 +858,8 @@ class ServiceMethod(trt.HasTraits, LifecycleSubject):
         except ServiceMethodError as err:
             self.error(-2, err)
         except Exception as err:
-            self.error(-1, ServiceMethodError(self, err))
+            tb = traceback.sys.exc_traceback
+            self.error(-1, ServiceMethodError(self, err, tb=tb))
 
         # output object contains:
         # data
@@ -781,7 +919,8 @@ class ServiceMethod(trt.HasTraits, LifecycleSubject):
             'input_widget': self.input_widget,
             'output_widget': self.output_widget,
             'params': [(p.name, p.get_metadata('ui_name'), str(p), p.get_metadata('desc')) for p in self.params],
-            'outputs': [(p.name, str(p), p.get_metadata('desc')) for p in self.outputs]
+            'outputs': [(p.name, str(p), p.get_metadata('desc')) for p in self.outputs],
+            'visible': self._visible
         }
         if formatted:
             return json.dumps(d, **kw)
@@ -804,9 +943,11 @@ class ServiceMethod(trt.HasTraits, LifecycleSubject):
             'properties': {
                 'parameters': {p.name: {'type': self.trt_2_jschema.get(p.info(), str(p)),
                                         'description': p.get_metadata('desc'),
-                                        'ui_name': p.get_metadata('ui_name')} for p in self.params},
-                'widgets': { 'input': self.input_widget, 'output': self.output_widget },
+                                        'ui_name': p.get_metadata('ui_name'),
+                                        'default': p.get_default_value()} for p in self.params},
+                'widgets': {'input': self.input_widget, 'output': self.output_widget },
             },
+            'visible': self._visible,
             'returns': {p.name: {'type': self.trt_2_jschema.get(p.info(), str(p)),
                                  'description': p.get_metadata('desc')} for p in self.outputs}
         }
@@ -848,11 +989,11 @@ def configure_service(**kw):
 def method(name=None):
     """Decorator function for creating new services.
 
-    Example usage:
+    Example usage::
     
         @method(name="MyMethod")
         def my_service(method, arg1, arg2, etc.):
-           ...method body...
+            pass # method body goes here
     """
     if _curr_service is None:
         raise ValueError("Attempt to call @method decorator before init_service()")
