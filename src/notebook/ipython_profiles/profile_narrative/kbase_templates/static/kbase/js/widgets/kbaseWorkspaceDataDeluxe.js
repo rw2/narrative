@@ -198,7 +198,38 @@
                                             'margin-right': '4px'})
                                       .click($.proxy(function(event) { this.refresh(); }, this))
                                       .append($('<span>')
-                                              .addClass('glyphicon glyphicon-refresh')));
+                                              .addClass('glyphicon glyphicon-refresh')))
+
+                              .append($('<div class="btn-group pull-right kb-ws-refresh-btn" style="margin-top:-4px; margin-right: 35px;">' +
+                                          '<button type=button class="btn btn-xs btn-default dropdown-toggle " data-toggle="dropdown" >' +
+                                            '<span class="glyphicon">+</span>' +
+                                          '</button>' +
+                                          '<ul class="dropdown-menu" role="menu" style="z-index:25000">' +
+                                            '<li><a href="">Add from KBase Datastores</a></li>' +
+                                            '<li><a href="">Upload data</li>' +
+                                          '</ul>' +
+                                        '</div>'))
+
+                              .append($('<button>')
+                                      .addClass('btn btn-xs btn-default kb-ws-refresh-btn')
+                                      .css({'margin-top': '-4px',
+                                            'left': '9px'})
+                                      .click($.proxy(function(event) {
+                                          if ($(event.currentTarget.firstChild).hasClass('glyphicon-chevron-down')) {
+                                              $(event.currentTarget.firstChild).removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-right');
+                                              this.$elem.find('.panel-body').hide();
+                                              this.$elem.find('.panel').removeClass('kb-data-main-panel');
+
+                                          }
+                                          else {
+                                              $(event.currentTarget.firstChild).removeClass('glyphicon-chevron-right').addClass('glyphicon-chevron-down');
+                                              this.$elem.find('.panel').addClass('kb-data-main-panel');
+                                              this.$elem.find('.panel-body').show();
+                                          }
+                                      }, this))
+                                      .append($('<span>')
+                                              .addClass('glyphicon glyphicon-chevron-down')));
+
 
             // encapsulating data panel - all the data-related stuff goes in here.
             // this way, it can all be hidden easily.

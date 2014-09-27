@@ -52,7 +52,8 @@
 
             // Make a function panel for everything to sit inside.
             this.$functionPanel = $('<div>')
-                                  .addClass('kb-function-body');
+                                  .addClass('kb-function-body')
+                                  .append('<input type="text" class="form-control" placeholder="Search for functions">');
 
             // The 'loading' panel should just have a spinning gif in it.
             this.$loadingPanel = $('<div>')
@@ -83,7 +84,23 @@
                                       .append($('<div>')
                                               .addClass('panel-title')
                                               .css({'text-align': 'center'})
-                                              .append('Services')))
+                                              .append('Services')                              
+                                              .append($('<button>')
+                                                  .addClass('btn btn-xs btn-default kb-ws-refresh-btn')
+                                                  .css({'margin-top': '-4px',
+                                                        'left': '9px'})
+                                                  .click($.proxy(function(event) {
+                                                      if ($(event.currentTarget.firstChild).hasClass('glyphicon-chevron-down')) {
+                                                          $(event.currentTarget.firstChild).removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-right');
+                                                          this.$elem.find('.kb-narr-panel-body').hide();
+                                                      }
+                                                      else {
+                                                          $(event.currentTarget.firstChild).removeClass('glyphicon-chevron-right').addClass('glyphicon-chevron-down');
+                                                          this.$elem.find('.kb-narr-panel-body').show();
+                                                      }
+                                                  }, this))
+                                                  .append($('<span>')
+                                                          .addClass('glyphicon glyphicon-chevron-down')))))
                               .append($('<div>')
                                       .addClass('panel-body kb-narr-panel-body')
                                       .append(this.$functionPanel)
