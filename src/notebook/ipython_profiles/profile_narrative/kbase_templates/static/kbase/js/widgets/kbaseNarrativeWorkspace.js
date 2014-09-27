@@ -37,6 +37,7 @@
 
         inputsRendered: false,
         maxSavedStates: 2,      // limit the states saved to 2 for now.
+        nextOutputCellId: '',
 
         // constant strings.
         KB_CELL: 'kb-cell',
@@ -930,8 +931,8 @@
                             offs += 1; // blank line, move offset
                         }
                         else {
-                            // look for @@S, @@P, @@D, @@G, or @@E
-                            var matches = line.match(/^@@([SPDGE])(.*)/);
+                            // look for @@S, @@P, @@D, @@G, @@J, or @@E
+                            var matches = line.match(/^@@([SPDGEJ])(.*)/);
                             if (matches) { // if we got one
                                 switch(matches[1]) {
                                     case 'S':
@@ -966,6 +967,12 @@
                                         self.dbg("[KERNEL] " + debug);
                                         break;
 
+                                    case 'J':
+                                        var jobId = matches[2];
+                                        self.dbg("[JOB ID] " + jobId);
+                                        self.registerJobId(jobId, cell);
+                                        break;
+
                                     default:
                                         // by default just dump it to the console
                                         self.dbg("[UNKNOWN TAG] " + line);
@@ -992,6 +999,34 @@
                     this.createOutputCell(cell, result);
                 }
             }
+        },
+
+        /**
+         * @method
+         * Registers the given job id with the Narrative.
+         * This stores the job id in the Narrative's metadata.
+         * XXX: Should this trigger a save?
+         */
+        registerJobId: function(jobId, sourceCell) {
+            // This is possibly the ugliest hack here. In the future, all cells should actually know their 
+            // fancy UUIDs. But that *might* be backwards incompatible with existing narratives that we want
+            // to show off.
+            //
+            // Really, all cells should be "NarrativeInput" or "NarrativeOutput" widgets that wrap their actual
+            // contents, and we can poke those widgets for their IDs. But that's later.
+            var txt = sourceCell.get_text();
+            var cellId = 'unknown';
+
+            if (txt)
+                cellId = $('<div>').append(txt).find('.panel').attr('id');
+
+            var narJobInfo = {
+                id : jobId,
+                source : cellId,
+                target : '',
+            };
+
+            this.trigger('registerJob.Narrative', narJobInfo);
         },
 
         /**

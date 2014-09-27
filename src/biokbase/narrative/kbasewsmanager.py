@@ -165,6 +165,7 @@ class KBaseWSNotebookManager(NotebookManager):
             nb.metadata.description = ''
             nb.metadata.name = new_name
             nb.metadata.data_dependencies = []
+            nb.metadata.job_ids = []
             nb.metadata.format = self.node_format
         except Exception as e:
             raise web.HTTPError(400, u'Unexpected error setting notebook attributes: %s' %e)
@@ -177,6 +178,8 @@ class KBaseWSNotebookManager(NotebookManager):
             # We flatten the data_dependencies array into a json string so that the
             # workspace service will accept it
             wsobj['meta']['data_dependencies'] = json.dumps( wsobj['meta']['data_dependencies'])
+            # Same for jobs list
+            wsobj['meta']['job_ids'] = json.dumps(wsobj['meta']['job_ids'])
             wsid = homews_id
             self.log.debug("calling ws_util.put_wsobj")
             res = ws_util.put_wsobj( wsclient, wsid, wsobj)
@@ -331,6 +334,8 @@ class KBaseWSNotebookManager(NotebookManager):
             if not hasattr(nb.metadata, 'description'):
                 nb.metadata.description = ''
             nb.metadata.data_dependencies = self.extract_data_dependencies(nb)
+            if not hasattr(nb.metadata, 'job_ids'):
+                nb.metadata.job_ids = []
             nb.metadata.format = self.node_format
 
         except Exception as e:

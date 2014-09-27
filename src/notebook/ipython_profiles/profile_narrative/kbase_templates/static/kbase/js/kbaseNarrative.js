@@ -25,6 +25,9 @@ narrative.init = function() {
     var functionWidget = $('#kb-function-panel').kbaseNarrativeFunctionPanel({ autopopulate: false });
     functionWidget.refreshAJAX();
 
+    var jobsWidget = $('#kb-jobs-panel').kbaseNarrativeJobsPanel({ autopopulate: false });
+    jobsWidget.showLoadingMessage('Waiting for Narrative to finish loading...');
+
     /*
      * Once everything else is loaded and the Kernel is idle,
      * Go ahead and fill in the rest of the Javascript stuff.
@@ -35,10 +38,8 @@ narrative.init = function() {
 
         var workspaceId = null;
         if (IPython && IPython.notebook && IPython.notebook.metadata) {
-            workspaceId = IPython.notebook.metadata.ws_name;                
+            workspaceId = IPython.notebook.metadata.ws_name;
         }
-
-        IPython.notebook.set_autosave_interval(0);
 
         if (workspaceId) {
             $('a#workspace-link').attr('href', $('a#workspace-link').attr('href') + 'objects/' + workspaceId);
@@ -50,5 +51,8 @@ narrative.init = function() {
             loadingImage: "/static/kbase/images/ajax-loader.gif",
             ws_id: IPython.notebook.metadata.ws_name
         });
+
+        // still needs to wait ~500ms for some godawful reason.
+        setTimeout( function() { jobsWidget.refresh(); }, 500);
     });
 };

@@ -12,6 +12,7 @@ sychan@lbl.gov
 """
 
 import os
+import sys
 import urllib
 import re
 import pprint
