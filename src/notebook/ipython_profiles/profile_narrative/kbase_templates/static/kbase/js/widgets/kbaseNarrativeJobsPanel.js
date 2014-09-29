@@ -46,7 +46,23 @@
                                             'margin-right': '4px'})
                                       .click($.proxy(function(event) { this.refresh(); }, this))
                                       .append($('<span>')
-                                              .addClass('glyphicon glyphicon-refresh')));
+                                              .addClass('glyphicon glyphicon-refresh')))
+                              .append($('<button>')
+                                  .addClass('btn btn-xs btn-default kb-ws-refresh-btn')
+                                  .css({'margin-top': '-4px',
+                                        'left': '9px'})
+                                  .click($.proxy(function(event) {
+                                      if ($(event.currentTarget.firstChild).hasClass('glyphicon-chevron-down')) {
+                                          $(event.currentTarget.firstChild).removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-right');
+                                          this.$elem.find('.kb-narr-panel-body').hide();
+                                      }
+                                      else {
+                                          $(event.currentTarget.firstChild).removeClass('glyphicon-chevron-right').addClass('glyphicon-chevron-down');
+                                          this.$elem.find('.kb-narr-panel-body').show();
+                                      }
+                                  }, this))
+                                  .append($('<span>')
+                                          .addClass('glyphicon glyphicon-chevron-down')));
 
             // Make a function panel for everything to sit inside.
             this.$jobsPanel = $('<div>')
