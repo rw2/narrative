@@ -66,6 +66,7 @@
         init: function(options) {
             this._super(options);
             this.ws_id = this.options.ws_id;
+            var self = this;
 
             this.is_readonly = null; // null => unset, force a check
             this.first_readonly = true; // still trying for first check?
@@ -244,17 +245,34 @@
               delay: {"show": 400, "hide": 50}
             });
 
-            $(window).on('resize', function() {
-                // 65 (nav) + 6 + 41 (tab headers) + 52 (data list title) + 340 (data list body) + 6 + 58 (method panel title) + 300 (method panel body) + 6
-                var win = $(this); //this = window
-                var h = win.height();
-                console.log(h);
-                var x = (h - 65 - 6 - 41 - 52 - 40 - 6 - 58 - 6 - 10) / 2;
-                if (x < 100)
-                    x = 100;
-                self.trigger('setDataListHeight.Narrative', x + 40);
-                self.trigger('setMethodPanelHeight.Narrative', x);
-            });
+            var winRef = $(window);
+            var docRef = $(document);
+            var onWindowLoadOrResize = function() {
+                // var x = 300;           // default height of method panel, data list panel is 40 px higher
+                var navBarH = 65;
+                var borderH = 6;          // it's between nabBar and other elements below
+                var tabHeaderH = 41;
+                var dataListTitle = 52;
+                //var dataListH = x + 40; // x is not known now and will be calculated based on window height
+                //var borderH = 6;        // one more border, now it's between data list and method panel
+                var  methodPanelTitleH = 58;
+                //var methodPanelH = x;   // x is not known now and will be calculated based on window height                
+                //var borderH = 6;        // one more border, now it's below method panel
+                var h = winRef.height();
+                if (!h)
+                    return;
+                var x = (h - navBarH - borderH - tabHeaderH - dataListTitle - borderH - methodPanelTitleH - borderH - 40) / 2;
+                if (x < 50)
+                    x = 50;               // minimum height of method panel is 50
+                docRef.trigger('setDataListHeight.Narrative', x + 40);
+                docRef.trigger('setMethodPanelHeight.Narrative', x);
+            };
+            winRef.on('resize', onWindowLoadOrResize);
+            docRef.on('ready', onWindowLoadOrResize);
+            winRef.on('resize', onWindowLoadOrResize);
+            setTimeout(function() {
+                onWindowLoadOrResize();
+            }, 100);
             
             this.initDeleteCellModal();
             // Initialize the data table.

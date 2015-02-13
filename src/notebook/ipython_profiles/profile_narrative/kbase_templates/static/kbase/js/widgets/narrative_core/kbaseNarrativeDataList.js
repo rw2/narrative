@@ -101,7 +101,7 @@
                     }
                 });
 
-            $(document).on('setDataListHeight.Narrative', function(h) {
+            $(document).on('setDataListHeight.Narrative', function(e, h) {
                 self.$mainListDiv.css({'height': h + 'px'});
             });
 

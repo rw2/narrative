@@ -106,7 +106,7 @@ kb_require(['kbaseMethodGallery'],
             this.$methodList = $('<div>')
                                .css({'height' : '300px', 'overflow-y': 'auto', 'overflow-x' : 'hidden'});
             var self = this;
-            $(document).on('setMethodPanelHeight.Narrative', function(h) {
+            $(document).on('setMethodPanelHeight.Narrative', function(e, h) {
                 self.$methodList.css({'height': h + 'px'});
             });
 
