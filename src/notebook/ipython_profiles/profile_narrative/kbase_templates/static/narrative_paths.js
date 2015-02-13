@@ -1,4 +1,4 @@
-    define('kbpaths', [], function(paths) {
+    /*define('kbpaths', [], function(paths) {
         requirejs.config({
         	//baseUrl: 'static/foo/bar/',
             //urlArgs: "bust=" + (new Date()).getTime(),
@@ -197,4 +197,4 @@
                 bootstrap : {deps : ["jquery"]}
             }
         });
-    });
+    });*/
