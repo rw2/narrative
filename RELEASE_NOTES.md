@@ -3,6 +3,23 @@ The Narrative Interface allows users to craft KBase Narratives using a combinati
 
 This is built on the IPython Notebook (more notes will follow).
 
+### Version 1.0.0 - 2/13/2015
+## Production release!
+
+### Version 0.6.4 - 2/12/2015
+__Changes__
+- Removed most 'View' methods from the Methods panel, except for those required by the Communities tutorials
+- Set the default page title back to "KBase Narrative"
+
+__Bugfixes__
+- In the rename dialog:
+  - Text field wasn't autofocused
+  - Enter button didn't automatically work
+- In other dropdowns, the escape key didn't work properly
+- https://atlassian.kbase.us/browse/KBASE-1586 - fixed parameter checking for min/max ints
+- https://atlassian.kbase.us/browse/NAR-687 - fixed issue with non-loading reactions and compounds for certain gapfilled FBA models
+- https://atlassian.kbase.us/browse/NAR-633 - Rerouted urls to the production site in prep for production release tomorrow. Eep!
+
 ### Version 0.6.3 - 2/12/2015
 __Bugfixes__
 - https://atlassian.kbase.us/browse/NAR-690 - Missing data types in data panel filter

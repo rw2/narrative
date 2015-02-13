@@ -291,6 +291,10 @@
                     self.$searchInput.on("change blur",function() { self.search(); });
                     if (self.objectList.length<=self.options.max_objs_to_prevent_filter_as_you_type_in_search) {
                         self.$searchInput.on("input",function() { self.search(); });
+                        self.$searchInput.on("keyup", function(e) {
+                            if (e.keyCode == 27) 
+                                self.$searchDiv.hide();
+                        });
                     }
 
                     self.trigger('dataUpdated.Narrative');
@@ -994,6 +998,7 @@
                         self.$searchDiv.show();
                         self.$sortByDiv.hide();
                         self.$filterTypeDiv.hide();
+                        self.$searchInput.focus();
                     } else {
                         self.$searchDiv.hide();
                     }
