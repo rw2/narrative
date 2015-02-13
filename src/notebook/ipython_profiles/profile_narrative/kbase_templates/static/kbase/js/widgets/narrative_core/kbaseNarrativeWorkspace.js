@@ -244,6 +244,18 @@
               delay: {"show": 400, "hide": 50}
             });
 
+            $(window).on('resize', function() {
+                // 65 (nav) + 6 + 41 (tab headers) + 52 (data list title) + 340 (data list body) + 6 + 58 (method panel title) + 300 (method panel body) + 6
+                var win = $(this); //this = window
+                var h = win.height();
+                console.log(h);
+                var x = (h - 65 - 6 - 41 - 52 - 40 - 6 - 58 - 6 - 10) / 2;
+                if (x < 100)
+                    x = 100;
+                self.trigger('setDataListHeight.Narrative', x + 40);
+                self.trigger('setMethodPanelHeight.Narrative', x);
+            });
+            
             this.initDeleteCellModal();
             // Initialize the data table.
             this.render();

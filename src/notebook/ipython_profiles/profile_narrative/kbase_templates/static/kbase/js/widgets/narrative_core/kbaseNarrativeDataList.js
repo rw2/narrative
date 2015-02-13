@@ -101,6 +101,10 @@
                     }
                 });
 
+            $(document).on('setDataListHeight.Narrative', function(h) {
+                self.$mainListDiv.css({'height': h + 'px'});
+            });
+
             this.$addDataButton = $('<span>').addClass('kb-data-list-add-data-button fa fa-plus fa-2x')
                                     .css({'position':'absolute', bottom:'15px', right:'25px', 'z-index':'5'})
                                     .click(function() {

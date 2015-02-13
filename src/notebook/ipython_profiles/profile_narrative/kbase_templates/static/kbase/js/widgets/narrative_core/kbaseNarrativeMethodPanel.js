@@ -105,6 +105,11 @@ kb_require(['kbaseMethodGallery'],
             // placeholder for apps and methods once they're loaded.
             this.$methodList = $('<div>')
                                .css({'height' : '300px', 'overflow-y': 'auto', 'overflow-x' : 'hidden'});
+            var self = this;
+            $(document).on('setMethodPanelHeight.Narrative', function(h) {
+                self.$methodList.css({'height': h + 'px'});
+            });
+
             // Make a function panel for everything to sit inside.
             this.$functionPanel = $('<div>')
                                   .addClass('kb-function-body')
