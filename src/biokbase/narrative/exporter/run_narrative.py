@@ -79,9 +79,9 @@ def execute_notebook(notebook):
     c.TemplateExporter.template_path = ['.', nar_templates]
 
     # Initialize the notebook execution object, and run the notebook. We set a
-    # 10 minute timeout for now, but it may need to be bumped up. Using
+    # 60 minute timeout for now, but it may need to be bumped up. Using
     # /tmp as the directory where the notebook will be run.
-    ep = ExecutePreprocessor(timeout=600)
+    ep = ExecutePreprocessor(timeout=3600)
     resources = {'metadata': {'path': '/tmp'}}
     return(ep.preprocess(notebook, resources))
 
