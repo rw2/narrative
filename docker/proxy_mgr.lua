@@ -1114,6 +1114,7 @@ use_proxy = function(self)
             ngx.log(ngx.WARN, "Error: failed to update docker cache: "..err)
         end
         dock_lock:unlock()
+        ngx.var.remote_user = username
     else
         -- I really don't even see how this condition is possible, or likely
         -- the session should either be found, created, or if it can't be created
