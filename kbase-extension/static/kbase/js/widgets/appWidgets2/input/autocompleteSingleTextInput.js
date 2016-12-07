@@ -40,6 +40,8 @@ define([
         div = t('div'),
         input = t('input');
 
+    // XXX Erik - the config still doesn't contain the service parameter. I really need that for a generic autocomplete widget
+
     function factory(config) {
         var options = {},
             constraints,
@@ -118,6 +120,7 @@ define([
          */
 
         function validate(rawValue) {
+
             return Promise.try(function() {
                 if (!options.enabled) {
                     return {
@@ -139,6 +142,7 @@ define([
          * Hooks up event listeners
          */
         function handleChange(newValue) {
+
             validate(newValue)
                 .then(function(result) {
                     if (result.isValid) {
@@ -176,51 +180,121 @@ define([
                 id: html.genId(),
                 class: 'form-control',
                 dataElement: 'input',
-                value: currentValue
+                value: (currentValue || {}).label
             });
         }
 
         function render() {
             var ic_id;
+            var span_id = html.genId();
+            var sub_id = html.genId();
 
             Promise.try(function() {
                     var events = Events.make(),
                         inputControl = makeInputControl(model.value, events, bus);
-                    dom.setContent('autocomplete-container', inputControl);
+
+                    /* XXX Erik
+
+                       Here's where the wheels really start to fall off - for the private taxon method, we need to display just the text field to start
+                       but after the user has typed something in, we should add this extra label underneath it that just says "Parent: $parent", with
+                       whatever the parent field is that was returned from the autocomplete. I'd originally tried adding it in with a display value of none, in the
+                       of changing the style later when the results from typeahead comes back, but it re-renders and nukes the field anyway.
+
+                       So I tried setting the currentValue to the array I need, but that fails the validation step.
+
+                       and it all gets screwed up once I learned that we should only display the label in the text field, the actual value returned needs to be the id.
+
+                       I'm lost on this.
+                    */
+
+                    var currentValue = model.value || {};
+                    var $inputContainer = $.jqElem('div');
+                    $inputContainer.append(inputControl);
+                    var $spanContainer = $.jqElem('span').attr('id', span_id).text(currentValue.parent ? currentValue.parent : '');
+                    var $subContainer =
+                      $.jqElem('div')
+                        .css('display', currentValue.parent ? 'block' : 'none')
+                        .attr('id', sub_id)
+                        .append(
+                          "Parent:"
+                        )
+                        .append(
+                          $spanContainer
+                        )
+                    ;
+
+                    $inputContainer.append($subContainer);
+
+                    dom.setContent('autocomplete-container', $inputContainer.html());
                     ic_id = $(inputControl).attr('id');
+
                     events.attachEvents(container);
                 })
                 .then(function() {
                     setTimeout(function() {
-                        var genericClient = new GenericClient(Config.url('service_wizard'), { token: Runtime.make().authToken() });
+                        var genericClient = new GenericClient(Config.url('service_wizard'), {token : Runtime.make().authToken()});
 
-                        var dog = new Bloodhound({
-                            datumTokenizer: Bloodhound.tokenizers.whitespace,
-                            queryTokenizer: Bloodhound.tokenizers.whitespace,
-                            // `states` is an array of state names defined in "The Basics"
-                            remote: {
-                                url: 'http://kbase.us/some/fake/url', //bloodhound remote requires a URL
-                                filter: function(query, settings) {
-                                    return query.hits;
-                                },
-                                prepare: function(settings) {
-                                    return settings;
-                                },
-                                transport: function(options, onSuccess, onError) {
-                                    genericClient.sync_call("taxonomy_service.search_taxonomy", [{
-                                        private: 0,
-                                        public: 1,
-                                        search: options.url,
-                                        limit: 10,
-                                        start: 0
-                                    }]).then(function(d) {
-                                        onSuccess(d[0]);
-                                    }).fail(function(e) {
-                                        onError(e);
-                                    });
-
+                        var publicDog = new Bloodhound({
+                          datumTokenizer: Bloodhound.tokenizers.whitespace,
+                          queryTokenizer: Bloodhound.tokenizers.whitespace,
+                          // `states` is an array of state names defined in "The Basics"
+                          remote : {
+                            url : 'http://kbase.us/some/fake/url',  //bloodhound remote requires a URL
+                            filter : function(query, settings) {
+                              return query.hits;
+                              return states;
+                            },
+                            prepare : function(settings) {
+                              return settings;
+                            },
+                            transport : function(options, onSuccess, onError) {
+                              genericClient.sync_call("taxonomy_service.search_taxonomy", [
+                                {
+                                  private : 0,
+                                  public : 1,
+                                  search : options.url,
+                                  limit : 10,
+                                  start : 0,
                                 }
+                              ]).then(function(d) {
+                                onSuccess(d[0]);
+                              }).fail(function(e) {
+                                onError(e);
+                              });
+
                             }
+                          }
+                        });
+
+                        var privateDog = new Bloodhound({
+                          datumTokenizer: Bloodhound.tokenizers.whitespace,
+                          queryTokenizer: Bloodhound.tokenizers.whitespace,
+                          remote : {
+                            url : 'http://kbase.us/some/fake/url',  //bloodhound remote requires a URL
+                            filter : function(query, settings) {
+                              return query.hits;
+                              return states;
+                            },
+                            prepare : function(settings) {
+                              return settings;
+                            },
+                            transport : function(options, onSuccess, onError) {
+                              genericClient.sync_call("taxonomy_service.search_taxonomy", [
+                                {
+                                  private : 1,
+                                  public : 0,
+                                  search : options.url,
+                                  limit : 10,
+                                  start : 0,
+                                }
+                              ]).then(function(d) {
+                                onSuccess(d[0]);
+                              }).fail(function(e) {
+                                onError(e);
+                              });
+
+                            }
+                          }
                         });
                         var $control = $('#' + ic_id);
                         $control.typeahead({
@@ -228,24 +302,52 @@ define([
                             highlight: true,
                             minLength: 2,
                             limit: 10
-                        }, {
-                            name: 'states',
-                            source: dog,
-                            display: function(v) {
-                                return v.label
-                            }
+                        },
+                        {
+                          name : 'public',
+                          source : publicDog,
+                          display : function(v) {
+                            return v.label
+                          },
+                          templates: { header: '<h4 class="tt-header">Public data</h4>' }
+                        },
+                        {
+                          name : 'private',
+                          source : privateDog,
+                          display : function(v) {
+                            return v.label
+                          },
+                          templates: { header: '<h4 class="tt-header">Private data</h4>' }
                         });
                         $control.bind('typeahead:select', function(e, suggestion) {
                             // NB for 'select' event it is the suggestion object,
                             // for 'chnage' it is the display value as defined above.
-                            // e.g. 
+                            // e.g.
                             // category: "public"
                             // id: "1779/300381/1"
                             // label: "Klebsiella sp. ok1_1_9_S34"
                             // parent: "Klebsiella"
                             // parent_ref: "1779/139747/1"
                             // console.log('suggestion', suggestion);
-                            handleChange(suggestion.label);
+
+                            // XXX Erik - this doesn't work, because after handleChange is invoked, I guess render is called at some point?
+                            // which causes a new element to be displayed on the page, which overwrites this completely.
+                            $('#'.sub_id).css('display', 'block');
+                            $('#'.span_id).text(suggestion.parent);
+
+                            // XXX Erik
+                            // Okay, now here's where it really starts to suck - for the create private taxon method ONLY, I need to maintain three values
+                            // the scientific name, the id, and the parent.
+                            // the scientific_name should be displayed in the text field itself, the parent is populated into a static label that sits
+                            // beneath the input box (once the user has typed something in), but the value which needs to be returned by the widget is
+                            // [id, parent], because that's what needs to be handed onto the service.
+                            //
+                            // This fails immediately because there's no way to validate an array. So is that a new method in validation.js? How should
+                            // that be created and invoked?
+                            //
+                            // for any other method (and a generic case), we need to display the label in the text field, but return the ID upon invoking
+                            // the method. Halp.
+                            handleChange([suggestion.label, suggestion.parent]);
                         });
                     }, 1);
                     return autoValidate();
